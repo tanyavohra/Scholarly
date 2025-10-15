@@ -1,0 +1,353 @@
+.content-of-question {
+  margin-top: 5px;
+  height: auto;         
+  min-height: 162px;    
+  max-height: none;     
+  overflow: visible;
+  display:grid;
+  align-items: center;
+  /* justify-content: center; */
+}
+
+.commentWord {
+  font-size: 1.3rem;
+  font-family: Playfair Display;
+}
+
+#questionTitle {
+  margin-bottom: 13px;
+}
+
+#questionInfo {
+  margin-right: 36px;
+    font-size: 0.9rem;
+    width: 380px;
+    text-align: right;
+    color: grey;
+}
+
+.questionAns {
+  margin-left: 6%;
+  margin-right: 11%;
+}
+
+#answerInput {
+  width: 88%;
+  height: 430px;
+  border-radius: 4px;
+  border: 4px;
+  border-color: gray;
+  display: flex;
+  text-align: left;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  margin-right: 5px;
+  font-size: 16px;
+}
+
+.submitPictureBox {
+  width: 88%;
+  height: 10px;
+  border-radius: 5px;
+  background-color: white;
+  margin-left: 0px; /* Center the box horizontally */
+  margin-top: 2px; /* Center the box horizontally */
+}
+#submit {
+  margin-left: 30%;
+}
+
+#postAns {
+  margin-top: 90px;
+  margin-bottom: 80px;
+  margin-left: 44%;
+}
+
+.theContainer {
+  display: flex;
+  flex-direction: row;
+  width: auto; /* Avoid fixed width here */
+}
+
+.theQtags{
+  margin-left: 86px;
+}
+
+.buttons-container {
+  margin-top: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Align buttons to the left */
+  max-height: 200px; /* Set your desired limited length */
+  overflow-y: 45px; /* Enable scrolling if needed */
+  /* Specify desired width */
+  width: 70px;
+}
+.voting-score{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 3px;
+}
+
+.button {
+  background-color: #f0f0f0;
+  color: black;
+  padding: 5px;
+  margin-bottom: 5px;
+  height: 40px; /* Set your desired fixed button size */
+}
+
+.content-container {
+  margin-left: 15px;
+  flex: 1; /* Take up remaining space in container */
+}
+
+.voting-buttons {
+  display: flex;
+  gap: 10px; /* Add spacing between buttons */
+}
+
+#upvote-button,
+#downvote-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+#upvote-button:hover,
+#downvote-button:hover {
+  background-color: #cbb9b9;
+}
+
+.upvote-icon,
+.downvote-icon {
+  font-size: 45px;
+  color: #333;
+}
+
+.upvote-icon-clicked{
+  font-size: 45px;
+  color:deepskyblue;
+}
+.downvote-icon-clicked{
+  font-size: 45px;
+  color:red;
+}
+
+.vote-score {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0 14px;
+}
+
+.btn-success {
+  background-color: #28a745;
+  color: #fff;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: #fff;
+}
+
+ol {
+  list-style-type: none;
+}
+
+
+.theContainerComm {
+  display: flex;
+  flex-direction: row;
+  width: auto; /* Avoid fixed width here */
+}
+
+.buttons-containeComm {
+  margin-top: 45px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Align buttons to the left */
+  max-height: 200px; /* Set your desired limited length */
+  overflow-y: auto; /* Enable scrolling if needed */
+  /* Specify desired width */
+  width: 70px;
+}
+
+.buttonComm {
+  background-color: #f0f0f0;
+  color: black;
+  padding: 5px;
+  margin-bottom: 5px;
+  height: 20px; /* Set your desired fixed button size */
+}
+
+.content-containerComm {
+  margin-left: 25px;
+  flex: 1; /* Take up remaining space in container */
+}
+
+.voting-buttonsComm {
+  display: flex;
+  gap: 4px; /* Add spacing between buttons */
+}
+
+#upvote-buttonComm,
+#downvote-buttonComm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.upvote-buttonComm:hover,
+.downvote-buttonComm:hover {
+  background-color: #cbb9b9;
+}
+
+.upvote-iconComm,
+.downvote-iconComm {
+  font-size: 25px;
+  color: #333;
+}
+
+.upvote-icon-clickedComm{
+  font-size: 25px;
+  color:deepskyblue;
+}
+.downvote-icon-clickedComm{
+  font-size: 25px;
+  color:red;
+}
+
+.vote-scoreComm {
+  text-align: center;
+  font-size: 15px;
+  font-weight: bold;
+  margin: 0 14px;
+}
+
+.btn-successComm {
+  
+  color: #fff;
+}
+
+.btn-dangerComm {
+  
+  color: #fff;
+}
+
+
+
+.titleContainer{
+  display: flex;
+  justify-content:left;
+  position: relative;
+}
+
+.queImg{
+  width:100px;
+  height: auto;
+  margin-bottom: 20px;
+}
+
+#marked{
+  position: absolute;
+  right: 35px;
+  top:10px;
+  padding-left: 3px;
+  padding-right: 3px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-radius: 5px;
+    height: 41px;
+    width: 94px;
+    font-size: 1.2em;
+    background-color: #7386D5;
+    color: white;
+    border-color: #7386D5;
+}
+#unmarked{
+  position: absolute;
+  right: 35px;
+  top:10px;
+  padding-left: 3px;
+  padding-right: 3px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-radius: 5px;
+    height: 41px;
+    width: 90px;
+    font-size: 1.2em;
+    background-color: cyan;
+    color: black;
+    border-color: white;
+}
+
+.mark{
+  width: 350px;
+  background-color: white;
+  margin-left: 35px;
+}
+
+
+/* post ans */
+.btn-outline-primary {
+  --bs-btn-color: #424657;
+  --bs-btn-border-color: #424657;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #0d6efd;
+  --bs-btn-hover-border-color: #0d6efd;
+  --bs-btn-focus-shadow-rgb: 13, 110, 253;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: rgba(25, 73, 206, 0.7);
+  --bs-btn-active-border-color: #0d6efd;
+  --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+  --bs-btn-disabled-color: #0d6efd;
+  --bs-btn-disabled-bg: transparent;
+  --bs-btn-disabled-border-color: #0d6efd;
+  --bs-gradient: none;
+}
+.btn-outline-primary {
+  --bs-btn-color: #424657;
+  --bs-btn-border-color: #424657;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #424657;
+  --bs-btn-hover-border-color: #424657;
+  --bs-btn-focus-shadow-rgb: 13, 110, 253;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #424657;
+  --bs-btn-active-border-color: #424657;
+  --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+  --bs-btn-disabled-color: #424657;
+  --bs-btn-disabled-bg: transparent;
+  --bs-btn-disabled-border-color: #424657;
+  --bs-gradient: none;
+}
+
+.userdate{
+  display: flex;
+  justify-content: left;
+}
+
+.que_heading{
+  display: flex;
+  justify-content: left;
+  margin-bottom: 10px;
+  margin-left: 20px;
+  mix-blend-mode:difference;
+  color: rgba(255, 255, 255, 1); /*Default color*/
+  opacity: 2;
+  
+  /* text-shadow: 2px 2px 8px rgba(255, 255, 255, 0.8);
+   */
+   
+}

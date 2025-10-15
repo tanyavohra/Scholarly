@@ -1,0 +1,9 @@
+flask
+flask-cors
+python-dotenv
+PyPDF2
+langchain
+langchain-google-genai
+langchain-community
+google-generativeai
+faiss-cpu   # or faiss-gpu if you need GPU

@@ -1,0 +1,15 @@
+# Node modules
+node_modules/
+dist/
+
+# Environment files
+backEnd/.env
+
+# Build files
+*.log
+*.pyc
+*.pkl
+*.faiss
+
+# Optional: OS files
+.DS_Store

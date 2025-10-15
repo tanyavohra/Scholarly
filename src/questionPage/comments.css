@@ -1,0 +1,104 @@
+ol {
+    list-style-type: none;
+  }
+  
+
+.theContainerComm {
+    display: flex;
+    flex-direction: row;
+    width: auto; /* Avoid fixed width here */
+  }
+  
+  .buttons-containeComm {
+    margin-top: 45px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* Align buttons to the left */
+    max-height: 200px; /* Set your desired limited length */
+    overflow-y: auto; /* Enable scrolling if needed */
+    /* Specify desired width */
+    width: 70px;
+  }
+  
+  .buttonComm {
+    background-color: #f0f0f0;
+    color: black;
+    padding: 5px;
+    margin-bottom: 5px;
+    height: 20px; /* Set your desired fixed button size */
+  }
+  
+  .content-containerComm {
+    margin-left: 25px;
+    flex: 1; /* Take up remaining space in container */
+  }
+  
+  .voting-buttonsComm {
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    gap: 4px; /* Add spacing between buttons */
+  }
+  
+  #upvote-buttonComm,
+  #downvote-buttonComm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background-color: nent;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .upvote-buttonComm:hover,
+  .downvote-buttonComm:hover {
+    background-color: #cbb9b9;
+  }
+  
+  .upvote-iconComm,
+  .downvote-iconComm {
+    font-size: 25px;
+    color: #333;
+  }
+  
+  .upvote-icon-clickedComm{
+    font-size: 25px;
+    color:deepskyblue;
+  }
+  .downvote-icon-clickedComm{
+    font-size: 25px;
+    color:red;
+  }
+  
+  .vote-scoreComm {
+    text-align: center;
+    font-size: 15px;
+    font-weight: bold;
+    margin: 0 14px;
+  }
+  
+  .btn-successComm {
+    background-color: #28a745;
+    color: #fff;
+  }
+  
+  .btn-dangerComm {
+    background-color: #fff;
+    color: #fff;
+  }
+
+  
+.commtopcontainer{
+  display: flex;
+  justify-content: left;
+}
+
+#commcontent{
+  padding-top: 20px;
+  padding-bottom: 20px;
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+  width: 88%;
+}

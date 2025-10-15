@@ -1,0 +1,198 @@
+.centered-box {
+    /* Set width and height of the box */
+    width: 900px; /* Adjust width as needed */
+    height: 165px; /* Adjust height as needed */
+    
+    /* Center the box horizontally */
+    margin: 0 auto; /* Shorthand for margin-top: 0; margin-right: auto; margin-left: auto; */
+    margin-top: 2px;
+    
+    /* Add background color or other styles as desired */
+    
+    /* background-color: transparent;#D9D9D9; */
+    /* border: 1px solid black; */
+    border-radius: 5px;
+
+    cursor: pointer;
+    /* background: linear-gradient(to left, #deeae1, #cad4c5); */
+    /* background: linear-gradient(to right, #f7fbff, #e7f4ff); */
+    /* background-color: rgba(255, 255, 255, 0.9); */
+    /* background-color: rgba(187, 192, 214, 0.9); */
+
+    backdrop-filter: blur(3px);
+    background-color: rgba(255, 255, 255, 0.88);
+
+
+
+    /* background-color: #f0f0f0; Light gray background */
+    box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4) /*Subtle shadow*/
+}
+
+.boxinbox{
+    display: flex;
+}
+
+.tagsnuser{
+    display: flex;
+    margin-left: 20px;
+    margin-top: 10px;
+    height: 40px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.hometagsnuser{
+    display: flex;
+    margin-left: 20px;
+    margin-top: 9px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+
+
+/* .tags{
+    display: flex;
+    margin-left: 0px;
+
+} */
+
+.tag{
+    /* margin-left: 8px; */
+    /* margin-right: 8px; */
+    padding-left: 10px;
+    padding-right: 10px;
+    color: white;
+    /* background-color:aqua; */
+    /* border-color: 1px solid black; */
+    /* border-radius: 11px; */
+}
+
+
+.user{
+    width: 180px;
+    overflow:hidden;
+    text-overflow: ellipsis;
+    margin-right: 25px;
+    display: flex;
+}
+
+
+
+.time{
+    position: absolute;
+    right: 0;
+    margin-right: 25px;
+    justify-self: right;
+    text-align: right;
+    overflow: hidden;
+    width: 185px;
+}
+
+.questionHeading{
+    margin-top: 10px;
+    margin-left: 25px;
+    width: 600px;
+    height: 100px;
+    line-height: 1.5;
+    white-space: normal;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    text-overflow:ellipsis;
+}
+.questionHeading h3{
+    margin: 0;
+    
+    max-height: 100%; /* Ensure the text doesn't exceed the container */
+    overflow: hidden;
+}
+
+.other{
+    width: 300px;
+    margin-top: 25px;
+    text-align: right;
+    margin-right: 25px;
+}
+
+#views{
+    padding-bottom: 5px;
+}
+
+#votes{
+    margin-top: 10px;
+    padding-bottom: 5px;
+}
+
+#answers{
+    margin-top: 5px;
+
+    padding-bottom: 5px;
+}
+
+.user-image{
+    background-color: wheat;
+    width: 25px; /* Adjust width as needed */
+    height: 25px; /* Adjust height as needed */
+    border-radius: 50%; /* Make the image circular */
+    object-fit: cover; /* Crop image to fit the container */
+}
+
+/* In your CSS file (e.g., style.css) */
+ 
+#que-page {
+    background-image: url('question-mark-background-1909040.png');
+    background-position: center;
+    background-attachment:scroll; /* Add this line */
+    background-repeat: repeat;
+    overflow: auto;
+    z-index: -90;
+}
+
+#quetags{
+    max-width: 490px;
+    margin-top: 0px;
+    overflow:hidden;
+    display: flex;
+    align-items: center;
+
+}
+#innerquetags{
+    max-width: 1100px;
+    margin-top: 0px;
+    overflow:hidden;
+    display: flex;
+    align-items: center;
+    
+}
+#youquetags{
+    margin-top: -3px;
+    max-width: 490px;
+    height: 35px;
+    display: flex;
+    overflow: hidden;
+}
+
+#qimg{
+    width: auto;
+    height: 470px;
+}
+
+
+#quetagresult{
+
+    /* margin-left: 4px; */
+    margin-right: 8px;
+    padding-left: 15px;
+    padding-right: 15px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    width:max-content;
+    font-style: bold;
+    color: white;
+    background-color: #00acee;
+    margin-top: 0px;
+    height:fit-content;
+    border-radius: 15px;
+}

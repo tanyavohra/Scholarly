@@ -1,0 +1,165 @@
+.upsearchcontainer{
+    display: flex;
+    align-items: center;
+    justify-content: left;
+}
+
+.backformsearch{
+    width: 52px;
+    height: 64px;
+    padding-left:5px;
+    padding-bottom: 5px;
+    cursor: pointer;
+    font-size: 2.6em;
+    /* background-color: red; */
+}
+.upSearchBar{
+    width: 92%;
+    height:64px;
+    margin-left: 0px;
+    background-color: white;
+    border-bottom: solid 2px black;
+}
+
+#upsearchbar{
+    width: 100%;
+    margin-top: 23px;
+    margin-left: 6px;
+    height: 56%;
+    border: none;
+}
+
+.no-outline:focus {
+    outline: none;
+}
+
+.ul_search{
+    margin-top: 40px;
+    list-style-type: none;
+    margin-left: 30px;
+}
+
+
+
+#sresult{
+    border: 1px solid black;
+    margin-bottom: 20px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-top: 30px;
+    padding-bottom: 30px;
+    width: 90%;
+    border-radius: 15px;
+    
+}
+#stagresult{
+    /* border: 1px solid black */
+    margin-bottom: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    width:max-content;
+    font-style: bold;
+    color: white;
+    background-color: #00acee;
+    height:fit-content;
+    border-radius: 15px;
+}
+#salltagresult{
+    margin-bottom: 10px;
+    margin-top: 10px;
+    margin-left: 10px;
+    margin-right: 10px;
+    padding-left: 15px;
+    padding-right: 15px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    width:max-content;
+    font-style: bold;
+    color: white;
+    background-color: #00acee;
+    height:fit-content;
+    border-radius: 15px;
+}
+
+#shead{
+    max-height: 300px;
+    text-overflow: ellipsis;
+    overflow-y: hidden;
+    margin-bottom: 10px;
+}
+
+
+#stype{
+    border: 1px solid black;
+    padding-left: 5px;
+    font-size: 0.95em;
+    padding-right: 5px;
+    background-color: #7F74D6;
+    color: white;
+    border-radius: 8px;
+
+}
+
+#sp{
+    max-height: 148px;
+    text-overflow: ellipsis;
+    overflow-y: hidden;
+}
+
+.tagSearch{
+    margin-top: 11px;
+    margin-left: px;
+}
+
+.cantFind{
+    background-color:antiquewhite;
+    width: 419px;
+    padding-left:25px;
+    padding-top:15px;
+    margin-left: 36%;
+    border-radius: 5px;
+}
+.ask-buttonsearch{
+    background-color: #424657;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: auto auto;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-left: 99px;
+    transition: all 0.6s;
+    margin-top: 13px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    height: 39px;
+}
+
+.ask-buttonsearch:hover{
+    background-color: #6F7692;
+}
+
+.tagSearchalltags{
+    margin-top: 13px;
+    margin-left: 30px;
+}
+
+.allthetags{
+    list-style-type: none;
+}
+
+.tag{
+    white-space:nowrap;
+}
+
+.tagsbox{
+    margin-top: 30px;
+    display: flex;
+    align-items: center;
+}
+
+.bigsearch{
+    height: fit-content;
+}

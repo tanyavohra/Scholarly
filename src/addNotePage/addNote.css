@@ -1,0 +1,8 @@
+.optional-box{
+    width: 900px;
+    height:300px;
+    background-color: #f0f0f0; /* Set your desired background color */
+    margin-left: 0px; /* Center the box horizontally */
+    margin-top: 25px; /* Center the box horizontally */
+    border-radius: 5px;
+}

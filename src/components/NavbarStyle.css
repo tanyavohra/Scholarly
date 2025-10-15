@@ -1,0 +1,91 @@
+/* Resetting default margin and padding */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Styles for the navigation bar */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color:black;
+    color: red;
+    padding: 5px 15px; 
+    width: 100%; 
+    margin-top: 0px;
+  }
+
+
+  /* Styles for the brand */
+  .brand {
+    font-size: 1.7rem;
+  }
+  /* Styles for the action buttons */
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    padding: 0px, 0px, 0px, 0px;
+  }
+  
+  /* Styles for the Ask Question button */
+  .ask-button {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 25px;
+    margin-left: 25px;
+    margin-right: 90px;
+    cursor: pointer;
+  }
+  
+  /* Styles for the login/logout buttons */
+  .login-logout button {
+    background-color: #555;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 20px;
+    cursor: pointer;
+  }
+  
+  /* Styles for the login/logout buttons hover effects */
+  .login-logout button:hover {
+    background-color: #777;
+  }
+  /* Styles for the search button */
+  .search-button {
+    background-color:grey;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 8px 20px;
+    margin-left: 0px;
+    cursor: pointer;
+  }
+  
+  /* Styles for the search bar */
+  .search-bar {
+      flex: 1;
+      align-items: center;
+      width: 800px;
+      height: 100px;
+      margin: 0 80px;
+      margin-right: 10px;
+      
+      margin-left: 100px;
+  }
+  
+  
+  .search-bar input {
+    flex: 1; /* Take remaining space */
+    width: 80%;
+    padding: 8px 0px 8px 15px;
+    border-radius: 7px;
+    border: none;
+    outline: none;
+    margin-right: 5px; /* Adjusted margin */
+  }
+  
