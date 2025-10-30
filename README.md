@@ -1,7 +1,3 @@
-Got it! Here's a **simplified, humanized README** for **Scholarly** reflecting your tech stack (**Node.js + Python only**) with just the features section:
-
----
-
 # Scholarly
 
 **Scholarly** is an interactive web application designed to make learning collaborative, simple, and engaging. It helps students, educators, and professionals connect by asking questions, providing answers, and sharing notes.
