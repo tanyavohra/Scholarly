@@ -1,5 +1,4 @@
 const express = require("express");
-const mysql = require("mysql2");
 const cors = require("cors");
 const path = require('path');
 const cookiesParser = require("cookie-parser");
@@ -15,8 +14,35 @@ const { generateThumbnail } = require('pdf-thumbnail');
 const { Blob } = require('buffer');
 const multer = require('multer');
 const mongoose = require("mongoose");
-mongoose.connect("mongodb+srv://vohratanya5_db_user:px2mtsGrzihQlena@cluster0.c02hzhr.mongodb.net/BrainLink?retryWrites=true&w=majority")
 require("dotenv").config();
+
+const nextId = require("./models/nextId");
+const User = require("./models/User");
+const Question = require("./models/Question");
+const Vote = require("./models/Vote");
+const Comment = require("./models/Comment");
+const CommentVote = require("./models/CommentVote");
+const Note = require("./models/Note");
+const NoteVote = require("./models/NoteVote");
+const Tag = require("./models/Tag");
+const QuestionTag = require("./models/QuestionTag");
+const MarkedQuestion = require("./models/MarkedQuestion");
+const MarkedNote = require("./models/MarkedNote");
+
+async function connectMongo() {
+  const mongoUri = process.env.MONGO_URI;
+  if (!mongoUri) {
+    console.warn("MONGO_URI is not set; MongoDB will not connect.");
+    return;
+  }
+  try {
+    await mongoose.connect(mongoUri);
+  } catch (err) {
+    console.error("Failed to connect to MongoDB:", err);
+  }
+}
+
+connectMongo();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -70,17 +96,6 @@ app.use(cors({
 app.use(express.json());
 app.use(cookiesParser());
 
-const db = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  port: parseInt(process.env.DB_PORT || "3306", 10),
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "signup",
-  waitForConnections: true,
-  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || "10", 10),
-  queueLimit: 0,
-});
-
 function cookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
   return {
@@ -90,13 +105,27 @@ function cookieOptions() {
   };
 }
 
-app.get("/healthz", (req, res) => {
-  res.json({ status: "ok" });
+app.get("/healthz", async (req, res) => {
+  try {
+    return res.json({ status: "ok" });
+  } catch (err) {
+    return res.status(500).json({ status: "error" });
+  }
 });
 
 app.get("/readyz", async (req, res) => {
   try {
-    await db.promise().query("SELECT 1");
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is not set");
+    }
+    if (mongoose.connection.readyState !== 1) {
+      await Promise.race([
+        mongoose.connection.asPromise(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Mongo connect timeout")), 3000)
+        ),
+      ]);
+    }
     await axios.get(`${PYTHON_BASE_URL}/healthz`, { timeout: 3000 });
     res.json({ status: "ready" });
   } catch (e) {
@@ -107,54 +136,44 @@ app.get("/readyz", async (req, res) => {
 //idint = 5;
 app.post("/signup", async (req, res) => {
   const saltRounds = 10;
-  
-  if(await checkPrevRecord(req)){
-    // console.log("LA")
-    return res.json({ Message: "Already Registered" });
-  }else{
-    console.log("AL")
-    const hashedPassword = await bcrypt.hash(req.body.password.toString(), 9);
 
-    const sql = "INSERT INTO users(name, email, password) VALUES(?)";
-    const values = [req.body.name, req.body.email, hashedPassword];
-    db.query(sql, [values], (err, data) => {
-      //console.log(values);
-      if (err) {
-        if (err.code === 'ER_DUP_ENTRY') {
-          // Handle duplicate entry error
-          return res.status(409).json({ Message: "Username or Email already exists" });
-        } else {
-          // Handle other types of errors
-          console.error(err);
-          return res.status(500).json({ Message: "Server Error" });
+  try {
+    if (await checkPrevRecord(req)) {
+      // console.log("LA")
+      return res.json({ Message: "Already Registered" });
+    } else {
+      console.log("AL");
+      const hashedPassword = await bcrypt.hash(req.body.password.toString(), 9);
+
+      try {
+        await User.create({
+          id: await nextId("users"),
+          name: req.body.name,
+          email: req.body.email,
+          password: hashedPassword,
+          token: null,
+        });
+        return res.json({ Status: "Success" });
+      } catch (err) {
+        if (err && err.code === 11000) {
+          return res
+            .status(409)
+            .json({ Message: "Username or Email already exists" });
         }
+        console.error(err);
+        return res.status(500).json({ Message: "Server Error" });
       }
-      console.log(data + "H");
-      return res.json({ Status: "Success" });
-    }); 
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ Message: "Server Error" });
   }
 });
-function checkPrevRecord(req) {
-  return new Promise((resolve, reject) => {
-    console.log("data")
-    db.query(
-      "SELECT * FROM users WHERE email = ?",
-      [req.body.email],
-      (err, data) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        }
-        if (data.length > 0) {
-          resolve(true);
-        }else {
-          console.log(data);
-          resolve(false);
 
-        }
-      }
-    );
-  });
+async function checkPrevRecord(req) {
+  console.log("data");
+  const existing = await User.findOne({ email: req.body.email }).select({ id: 1 });
+  return !!existing;
 }
 
 const verifyUser = (req, res, next) => {
@@ -175,23 +194,16 @@ const verifyUser = (req, res, next) => {
     });
   }
 };
-app.get("/", verifyUser, (req, res) => {
-  return res.json({ Status: "Success", name: req.name });
+app.get("/", verifyUser, async (req, res) => {
+  try {
+    return res.json({ Status: "Success", name: req.name });
+  } catch (err) {
+    return res.json({ Message: "Server Error" });
+  }
 });
 
-function updateToken(email, token) {
-  const sql = "UPDATE users SET token=? WHERE email=?";
-  const values = [token, email];
-
-  return new Promise((resolve, reject) => {
-    db.query(sql, values, (err, results) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(results);
-      }
-    });
-  });
+async function updateToken(email, token) {
+  await User.updateOne({ email }, { $set: { token } });
 }
 
 // app.post("/login", (req, res) => {
@@ -234,88 +246,71 @@ function updateToken(email, token) {
 //     }
 //   });
 // });
-app.post("/login", (req, res) => {
-  const sql = "SELECT * FROM users WHERE email = ?";
+app.post("/login", async (req, res) => {
   const values = [req.body.email];
-  db.query(sql, [req.body.email], async (err, data) => {
-    if (err) {
-      console.log(err + "H");
-      return res.json("Error");
-    }
-    if (data.length > 0) {
-      // console.log("Done");
-      // return res.json("Login Done!");
-       
-      // await checkPass(req, res, values);
-      // const validPassword = await bcrypt.compare(req.body.password, data[0].password);
-      // let password = String(req.body.password); // Convert to string if necessary
-      // let tp = password.toString()
-      // console.log(req.body.password)
-    const validPassword = await bcrypt.compare(req.body.password.toString(), data[0].password);
-    
-    if (validPassword) {
-        console.log("YEeY validpass")
-        const token = jwt.sign({ name: data[0].name }, JWT_SECRET, { expiresIn: "1d" });
-        res.cookie("token", token, cookieOptions());
-        updateToken(values[0], token);
-        return res.json({ Status: "Success" });
-      } else {
-        console.log("NO>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        return res.json({ Message: "Invalid email or password" });
-      }
-    } else {
-      console.log("", data);
+  try {
+    const user = await User.findOne({ email: req.body.email });
+    if (!user) {
+      console.log("", []);
       return res.json({ Message: "No Record... Signup!" });
     }
-  });
-});
-function checkPass(req, res, values) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "SELECT * FROM users WHERE password = ?",
-      [req.body.password],
-      (err, data) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        }
-        if (data.length > 0) {
-          const name = data[0].name;
-          const token = jwt.sign({ name }, JWT_SECRET, { expiresIn: "1d" });
-          res.cookie("token", token, cookieOptions());
 
-          updateToken(values[0], token);
-
-          return res.json({ Status: "Success" });
-        }else {
-          console.log(data);
-          return res.json({ Message: "Wrong Password!"});
-        }
-      }
+    const validPassword = await bcrypt.compare(
+      req.body.password.toString(),
+      user.password
     );
-  });
+
+    if (validPassword) {
+      console.log("YEeY validpass");
+      const token = jwt.sign({ name: user.name }, JWT_SECRET, { expiresIn: "1d" });
+      res.cookie("token", token, cookieOptions());
+      await updateToken(values[0], token);
+      return res.json({ Status: "Success" });
+    } else {
+      console.log(
+        "NO>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+      );
+      return res.json({ Message: "Invalid email or password" });
+    }
+  } catch (err) {
+    console.log(err + "H");
+    return res.json("Error");
+  }
+});
+
+async function checkPass(req, res, values) {
+  try {
+    const user = await User.findOne({ password: req.body.password });
+    if (user) {
+      const token = jwt.sign({ name: user.name }, JWT_SECRET, { expiresIn: "1d" });
+      res.cookie("token", token, cookieOptions());
+      await updateToken(values[0], token);
+      return res.json({ Status: "Success" });
+    } else {
+      console.log([]);
+      return res.json({ Message: "Wrong Password!" });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 }
 
-app.get("/logout", (req, res) => {
-  res.clearCookie("token", cookieOptions());
-  return res.json({ Status: "Success" });
+app.get("/logout", async (req, res) => {
+  try {
+    res.clearCookie("token", cookieOptions());
+    return res.json({ Status: "Success" });
+  } catch (err) {
+    return res.json({ Message: "Server Error" });
+  }
 });
 
-function get_author_id(token) {
-  return new Promise((resolve, reject) => {
-    const sql = "SELECT id FROM users WHERE token = ?";
-    const values = [token];
-
-    db.query(sql, values, (err, results) => {
-      if (err) {
-        reject(err);
-      } else if (results.length === 0) {
-        reject(new Error("No user found for the provided token"));
-      } else {
-        resolve(results[0].id);
-      }
-    });
-  });
+async function get_author_id(token) {
+  const user = await User.findOne({ token }).select({ id: 1 });
+  if (!user) {
+    throw new Error("No user found for the provided token");
+  }
+  return user.id;
 }
 
 // app.post("/question", async (req, res) => {
@@ -357,70 +352,70 @@ app.post("/question", async (req, res) => {
   try {
     const authorId = await get_author_id(token);
 
-    // Insert the question into the 'questions' table
-    const sqlInsertQuestion =
-      "INSERT INTO questions (title, content, author_id, image_url) VALUES (?, ?, ?, ?)";
-    const questionValues = [
-      req.body.title,
-      req.body.question,
-      authorId,
-      req.body.url,
-    ];
-
-    db.query(sqlInsertQuestion, questionValues, (err, result) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error inserting question");
-      }
-
-      const questionId = result.insertId; // Retrieve the inserted question ID
-
-      // If there are no tags, return success response
-      if (!req.body.tags || req.body.tags.length === 0) {
-        return res.json({ success: true, questionId });
-      }
-
-      // Insert tags into 'tags' table if they don't already exist
-      const tags = req.body.tags; // Assuming tags are sent as an array in the request body
-      const tagPlaceholders = tags.map(() => "(?)").join(",");
-      const sqlInsertTags = `INSERT IGNORE INTO tags (name) VALUES ${tagPlaceholders}`;
-
-      db.query(sqlInsertTags, tags, (err, tagResult) => {
-        if (err) {
-          console.error(err);
-          return res.json("Error inserting tags");
-        }
-
-        // Retrieve tag IDs for the inserted or existing tags
-        const sqlSelectTags = `SELECT id FROM tags WHERE name IN (${tagPlaceholders})`;
-        db.query(sqlSelectTags, tags, (err, tagIds) => {
-          if (err) {
-            console.error(err);
-            return res.json("Error retrieving tag IDs");
-          }
-
-          // Insert into 'question_tags' junction table
-          const questionTagValues = tagIds.map((tag) => [
-            questionId,
-            tag.id,
-          ]);
-          const sqlInsertQuestionTags =
-            "INSERT INTO question_tags (question_id, tag_id) VALUES ?";
-          db.query(
-            sqlInsertQuestionTags,
-            [questionTagValues],
-            (err, finalResult) => {
-              if (err) {
-                console.error(err);
-                return res.json("Error linking tags to question");
-              }
-
-              return res.json({ success: true, questionId });
-            }
-          );
-        });
+    let question;
+    try {
+      question = await Question.create({
+        id: await nextId("questions"),
+        title: req.body.title,
+        content: req.body.question,
+        author_id: authorId,
+        image_url: req.body.url,
       });
-    });
+    } catch (err) {
+      console.error(err);
+      return res.json("Error inserting question");
+    }
+
+    const questionId = question.id;
+
+    if (!req.body.tags || req.body.tags.length === 0) {
+      return res.json({ success: true, questionId });
+    }
+
+    const tags = req.body.tags;
+    try {
+      for (const tagName of tags) {
+        const existing = await Tag.findOne({ name: tagName }).select({ id: 1 });
+        if (!existing) {
+          try {
+            await Tag.create({ id: await nextId("tags"), name: tagName });
+          } catch (err) {
+            if (!(err && err.code === 11000)) {
+              throw err;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      return res.json("Error inserting tags");
+    }
+
+    let tagDocs;
+    try {
+      tagDocs = await Tag.find({ name: { $in: tags } }).select({ id: 1 });
+    } catch (err) {
+      console.error(err);
+      return res.json("Error retrieving tag IDs");
+    }
+
+    try {
+      const questionTags = [];
+      for (const tagDoc of tagDocs) {
+        questionTags.push({
+          id: await nextId("question_tags"),
+          question_id: questionId,
+          tag_id: tagDoc.id,
+        });
+      }
+      if (questionTags.length > 0) {
+        await QuestionTag.insertMany(questionTags);
+      }
+      return res.json({ success: true, questionId });
+    } catch (err) {
+      console.error(err);
+      return res.json("Error linking tags to question");
+    }
   } catch (error) {
     console.error(error);
     return res.json("Error");
@@ -457,99 +452,58 @@ app.post("/question", async (req, res) => {
 //         })
 // })
 
-app.get("/allquestions", (req, res) => {
+app.get("/allquestions", async (req, res) => {
   try {
-    db.query("SELECT * FROM questions", (err, data) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(data);
-    });
+    const data = await Question.find({});
+    return res.json(data);
   } catch (error) {
     console.error(error);
     return res.json("Error");
   }
 });
 
-function updateVote(req, newValue, existingVoteid, existingvotevalue) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE votes SET value = ? WHERE id = ?",
-      [newValue, existingVoteid],
-      async (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        }
-        await updateRating(req, existingvotevalue, newValue);
-        console.log(updateResult);
-        resolve(updateResult);
-      }
-    );
-  });
+async function updateVote(req, newValue, existingVoteid, existingvotevalue) {
+  const updateResult = await Vote.updateOne(
+    { id: existingVoteid },
+    { $set: { value: newValue } }
+  );
+  await updateRating(req, existingvotevalue, newValue);
+  console.log(updateResult);
+  return updateResult;
 }
 
 async function addVote(req, user_id, target_id, vote_type, is_comment) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "INSERT INTO votes (user_id, " +
-        (is_comment ? "comment_id" : "question_id") +
-        ", value) VALUES (?, ?, ?)",
-      [user_id, target_id, vote_type],
-      async (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-        await addRating(req);
-        console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
+  const voteDoc = {
+    id: await nextId("votes"),
+    user_id,
+    value: vote_type,
+    question_id: is_comment ? null : target_id,
+    comment_id: is_comment ? target_id : null,
+  };
+  const insertResult = await Vote.create(voteDoc);
+  await addRating(req);
+  console.log(insertResult);
+  return insertResult;
 }
-function addRating(req) {
+async function addRating(req) {
   // add rating
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE questions SET rating = rating+? WHERE id = ?",
-      [req.body.vote_type, req.body.target_id],
-      (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-
-        console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
+  const insertResult = await Question.updateOne(
+    { id: req.body.target_id },
+    { $inc: { rating: req.body.vote_type } }
+  );
+  console.log(insertResult);
+  return insertResult;
 }
 
-function updateRating(req, existingvalue, newValue) {
+async function updateRating(req, existingvalue, newValue) {
   // rating - existingvalue + newValue
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE questions SET rating = rating-?+? WHERE id = ?",
-      [existingvalue, newValue, req.body.target_id],
-      (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-
-        console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
+  const delta = -existingvalue + newValue;
+  const insertResult = await Question.updateOne(
+    { id: req.body.target_id },
+    { $inc: { rating: delta } }
+  );
+  console.log(insertResult);
+  return insertResult;
 }
 
 app.post("/vote", async (req, res) => {
@@ -561,59 +515,47 @@ app.post("/vote", async (req, res) => {
   const isComment = req.body.is_comment;
   console.log(req);
 
-  const user_id = await get_author_id(token);
-  console.log("---------" + user_id);
-  const sql = `SELECT * FROM votes WHERE user_id = ? AND ${
-    isComment ? "comment_id" : "question_id"
-  } = ?`;
-  const values = [user_id, req.body.target_id];
-  new Promise((resolve, reject) => {
-    db.query(sql, values, (err, results) => {
-      if (err) {
-        console.log(err + "H");
-        reject(err);
-      } else {
-        console.log("***********" + results);
-        resolve(results);
-      }
-    });
-  })
-    .then(async (results) => {
-      if (results.length > 0) {
-        const existingVote = results[0];
-        const newValue =
-          existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
-        console.log("U");
-        try {
-          await updateVote(req, newValue, existingVote.id, results[0].value);
+  try {
+    const user_id = await get_author_id(token);
+    console.log("---------" + user_id);
 
-          return res.json(results);
-        } catch (updateError) {
-          console.error(updateError);
-          return res.json("Error updating vote");
-        }
-      } else {
-        console.log("i");
-        try {
-          await addVote(
-            req,
-            user_id,
-            req.body.target_id,
-            req.body.vote_type,
-            isComment
-          );
+    const filter = { user_id };
+    if (isComment) {
+      filter.comment_id = req.body.target_id;
+    } else {
+      filter.question_id = req.body.target_id;
+    }
 
-          return res.json("done");
-        } catch (addError) {
-          console.error(addError);
-          return res.json("Error adding vote");
-        }
+    const results = await Vote.find(filter);
+    console.log("***********" + results);
+
+    if (results.length > 0) {
+      const existingVote = results[0];
+      const existingVoteJson = [existingVote.toJSON()];
+      const newValue =
+        existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
+      console.log("U");
+      try {
+        await updateVote(req, newValue, existingVote.id, existingVote.value);
+        return res.json(existingVoteJson);
+      } catch (updateError) {
+        console.error(updateError);
+        return res.json("Error updating vote");
       }
-    })
-    .catch((error) => {
-      console.error(error);
-      return res.json("Error querying database");
-    });
+    } else {
+      console.log("i");
+      try {
+        await addVote(req, user_id, req.body.target_id, req.body.vote_type, isComment);
+        return res.json("done");
+      } catch (addError) {
+        console.error(addError);
+        return res.json("Error adding vote");
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    return res.json("Error querying database");
+  }
 });
 
 app.post("/uservote", async (req, res) => {
@@ -622,36 +564,29 @@ app.post("/uservote", async (req, res) => {
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  const user_id = await get_author_id(token);
-  db.query(
-    "SELECT value FROM votes WHERE question_id = ? AND user_id = ?",
-    [req.body.target_id, user_id],
-    (err, getVote) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(getVote);
-    }
-  );
+  try {
+    const user_id = await get_author_id(token);
+    const votes = await Vote.find({
+      question_id: req.body.target_id,
+      user_id,
+    }).select({ value: 1 });
+    return res.json(votes.map((v) => ({ value: v.value })));
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 });
 
-app.post("/questionrating", (req, res) => {
-  db.query(
-    "SELECT rating FROM questions WHERE id = ?",
-    [req.body.target_id],
-    (err, getVote) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(getVote);
-    }
-  );
+app.post("/questionrating", async (req, res) => {
+  try {
+    const questions = await Question.find({ id: req.body.target_id }).select({
+      rating: 1,
+    });
+    return res.json(questions.map((q) => ({ rating: q.rating })));
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 });
 
 app.post("/comment", async (req, res) => {
@@ -663,61 +598,41 @@ app.post("/comment", async (req, res) => {
 
   try {
     const authorId = await get_author_id(token);
-
-    const sql = "INSERT INTO comments(content, user_id, question_id) VALUES(?)";
-    const values = [req.body.comment_content, authorId, req.body.question_id];
-
-    db.query(sql, [values], (err, data) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      console.log(data);
-      return res.json({ Status: "Success" });
+    await Comment.create({
+      id: await nextId("comments"),
+      content: req.body.comment_content,
+      user_id: authorId,
+      question_id: req.body.question_id,
     });
+    return res.json({ Status: "Success" });
   } catch (error) {
     console.error(error);
     return res.json("Error");
   }
 });
 
-app.get("/allcomments/:id", (req, res) => {
+app.get("/allcomments/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    db.query(
-      "SELECT * FROM comments WHERE question_id = ?",
-      [id],
-      (err, data) => {
-        if (err) {
-          console.error(err);
-          return res.json("Error");
-        }
-        // console.log(data);
-
-        return res.json(data);
-      }
-    );
+    const data = await Comment.find({ question_id: id });
+    return res.json(data);
   } catch (error) {
     console.error(error);
     return res.json("Error");
   }
 });
 
-app.post("/commentrating", (req, res) => {
+app.post("/commentrating", async (req, res) => {
   const targetIds = req.body.target_ids;
-  db.query(
-    "SELECT rating FROM comments WHERE id IN ?",
-    [targetIds],
-    (err, getVote) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(getVote);
-    }
-  );
+  try {
+    const comments = await Comment.find({ id: { $in: targetIds } }).select({
+      rating: 1,
+    });
+    return res.json(comments.map((c) => ({ rating: c.rating })));
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 });
 
 app.post("/usercommentvote", async (req, res) => {
@@ -728,96 +643,59 @@ app.post("/usercommentvote", async (req, res) => {
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  const user_id = await get_author_id(token);
-  db.query(
-    "SELECT value FROM comment_votes WHERE comment_id IN ? AND user_id = (?)",
-    [targetIds, user_id],
-    (err, getVote) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(getVote);
-    }
-  );
+  try {
+    const user_id = await get_author_id(token);
+    const votes = await CommentVote.find({
+      comment_id: { $in: targetIds },
+      user_id,
+    }).select({ value: 1 });
+    return res.json(votes.map((v) => ({ value: v.value })));
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 });
 
-function updatecommVote(req, newValue, existingVoteid, existingVotevalue) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE comment_votes SET value = ? WHERE id = ?",
-      [newValue, existingVoteid],
-      async (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        }
-        await updatecommRating(req, existingVotevalue, newValue);
-        console.log(updateResult);
-        resolve(updateResult);
-      }
-    );
-  });
+async function updatecommVote(req, newValue, existingVoteid, existingVotevalue) {
+  const updateResult = await CommentVote.updateOne(
+    { id: existingVoteid },
+    { $set: { value: newValue } }
+  );
+  await updatecommRating(req, existingVotevalue, newValue);
+  console.log(updateResult);
+  return updateResult;
 }
 
-function addcommVote(req, user_id, target_id, vote_type, is_comment) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "INSERT INTO comment_votes (user_id, comment_id ,value) VALUES (?, ?, ?)",
-      [user_id, target_id, vote_type],
-      async (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-        await addcommRating(req);
-        console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
+async function addcommVote(req, user_id, target_id, vote_type, is_comment) {
+  const insertResult = await CommentVote.create({
+    id: await nextId("comment_votes"),
+    user_id,
+    comment_id: target_id,
+    value: vote_type,
   });
+  await addcommRating(req);
+  console.log(insertResult);
+  return insertResult;
 }
-function addcommRating(req) {
+async function addcommRating(req) {
   // add rating
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE comments SET rating = rating+? WHERE id = ?",
-      [req.body.vote_type, req.body.target_id],
-      (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-
-        console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
+  const insertResult = await Comment.updateOne(
+    { id: req.body.target_id },
+    { $inc: { rating: req.body.vote_type } }
+  );
+  console.log(insertResult);
+  return insertResult;
 }
 
-function updatecommRating(req, existingvalue, newValue) {
+async function updatecommRating(req, existingvalue, newValue) {
   // rating - existingvalue + newValue
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE comments SET rating = rating-?+? WHERE id = ?",
-      [existingvalue, newValue, req.body.target_id],
-      (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-
-        console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
+  const delta = -existingvalue + newValue;
+  const insertResult = await Comment.updateOne(
+    { id: req.body.target_id },
+    { $inc: { rating: delta } }
+  );
+  console.log(insertResult);
+  return insertResult;
 }
 
 app.post("/commentvote", async (req, res) => {
@@ -829,82 +707,57 @@ app.post("/commentvote", async (req, res) => {
   const isComment = req.body.is_comment;
   console.log(req);
 
-  const user_id = await get_author_id(token);
-  console.log("---------" + user_id);
-  const sql = `SELECT * FROM comment_votes WHERE user_id = ?  AND comment_id = ?`;
-  const values = [user_id, req.body.target_id];
-  new Promise((resolve, reject) => {
-    db.query(sql, values, (err, results) => {
-      if (err) {
-        console.log(err + "H");
-        reject(err);
-      } else {
-        console.log("***********" + results);
-        resolve(results);
-      }
-    });
-  })
-    .then(async (results) => {
-      if (results.length > 0) {
-        const existingVote = results[0];
-        const newValue =
-          existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
-        console.log("U");
+  try {
+    const user_id = await get_author_id(token);
+    console.log("---------" + user_id);
 
-        try {
-          await updatecommVote(
-            req,
-            newValue,
-            existingVote.id,
-            results[0].value
-          );
-          return res.json(results);
-        } catch (updateError) {
-          console.error(updateError);
-          return res.json("Error updating vote");
-        }
-      } else {
-        console.log("i");
-        // await addcommRating(req);
-        try {
-          await addcommVote(
-            req,
-            user_id,
-            req.body.target_id,
-            req.body.vote_type,
-            isComment
-          );
-          return res.json("done");
-        } catch (addError) {
-          console.error(addError);
-          return res.json("Error adding vote");
-        }
-      }
-    })
-    .catch((error) => {
-      console.error(error);
-      return res.json("Error querying database");
+    const results = await CommentVote.find({
+      user_id,
+      comment_id: req.body.target_id,
     });
+    console.log("***********" + results);
+
+    if (results.length > 0) {
+      const existingVote = results[0];
+      const existingVoteJson = [existingVote.toJSON()];
+      const newValue =
+        existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
+      console.log("U");
+
+      try {
+        await updatecommVote(req, newValue, existingVote.id, existingVote.value);
+        return res.json(existingVoteJson);
+      } catch (updateError) {
+        console.error(updateError);
+        return res.json("Error updating vote");
+      }
+    } else {
+      console.log("i");
+      try {
+        await addcommVote(req, user_id, req.body.target_id, req.body.vote_type, isComment);
+        return res.json("done");
+      } catch (addError) {
+        console.error(addError);
+        return res.json("Error adding vote");
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    return res.json("Error querying database");
+  }
 });
 
-app.get("/allcomments", (req, res) => {
+app.get("/allcomments", async (req, res) => {
   try {
-    db.query("SELECT * FROM comments", (err, data) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(data);
-    });
+    const data = await Comment.find({});
+    return res.json(data);
   } catch (error) {
     console.error(error);
     return res.json("Error");
   }
 });
 
-app.get("/userInfo", (req, res) => {
+app.get("/userInfo", async (req, res) => {
   const targetIds = req.body.target_ids;
 
   const token = req.cookies.token;
@@ -912,31 +765,28 @@ app.get("/userInfo", (req, res) => {
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  const sql = "SELECT * FROM users WHERE token = ?";
-  db.query(sql, [token], async (err, data) => {
-    if (err) {
-      console.log(err + "H");
-      return res.json("Error");
-    }
-    
-      return res.json(data);
-  });
+  try {
+    const data = await User.find({ token }).select({
+      id: 1,
+      name: 1,
+      email: 1,
+      password: 1,
+      token: 1,
+    });
+    return res.json(data);
+  } catch (err) {
+    console.log(err + "H");
+    return res.json("Error");
+  }
 });
 
 
 
-app.get("/allnotes", (req, res) => {
-  console.log("ds")
+app.get("/allnotes", async (req, res) => {
+  console.log("ds");
   try {
-    db.query("SELECT * FROM notes", (err, data) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(data);
-    });
+    const data = await Note.find({});
+    return res.json(data);
   } catch (error) {
     console.error(error);
     return res.json("Error");
@@ -948,79 +798,62 @@ app.post("/noteupload", async (req, res) => {
   const token = req.cookies.token;
 
   if (!token) {
-      return res.status(401).json({ message: "Authentication token not provided." });
+    return res.status(401).json({ message: "Authentication token not provided." });
   }
 
   try {
-      
-      const authorId = await get_author_id(token);
-
-      const sql = "INSERT INTO notes (course_name, semester, prof_name, course_description, author_id, votes, pdf, file_name, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-      const values = [
-          req.body.course_name,
-          req.body.semester,
-          req.body.prof_name,
-          req.body.course_description,
-          authorId,
-          0,  
-          req.body.pdf_url,
-          req.body.file_name,
-          req.body.file_size  
-      ];
-
-      db.query(sql, values, (err, result) => {
-          if (err) {
-              console.error('Error inserting note into database:', err);
-              return res.status(500).json({ message: "Error inserting note into database." });
-          }
-          console.log('Note inserted successfully:', result);
-          return res.status(200).json({ message: "Note uploaded successfully." });
+    const authorId = await get_author_id(token);
+    try {
+      const result = await Note.create({
+        id: await nextId("notes"),
+        course_name: req.body.course_name,
+        semester: req.body.semester,
+        prof_name: req.body.prof_name,
+        course_description: req.body.course_description,
+        author_id: authorId,
+        votes: 0,
+        pdf: req.body.pdf_url,
+        file_name: req.body.file_name,
+        file_size: req.body.file_size,
       });
-
+      console.log("Note inserted successfully:", result);
+      return res.status(200).json({ message: "Note uploaded successfully." });
+    } catch (err) {
+      console.error("Error inserting note into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting note into database." });
+    }
   } catch (error) {
-      console.error('Error uploading note:', error);
-      return res.status(500).json({ message: "Error uploading note." });
+    console.error("Error uploading note:", error);
+    return res.status(500).json({ message: "Error uploading note." });
   }
 });
 
 
-function get_user_name(id) {
-  return new Promise((resolve, reject) => {
-    const sql = `SELECT name FROM users WHERE id = ?`;
-    db.query(sql, [id], (err, results) => {
-      if (err) {
-        reject(err);
-      } else if (results.length === 0) {
-        reject(new Error("No user found for the provided id"));
-      } else {
-        // console.log("get_user_name ", results[0].name);
-        resolve(results[0].name);
-      }
-    });
-  });
+async function get_user_name(id) {
+  const user = await User.findOne({ id }).select({ name: 1 });
+  if (!user) {
+    throw new Error("No user found for the provided id");
+  }
+  return user.name;
 }
 
 
-app.post("/username", (req, res) => {
-  console.log("request ", req)
-  const id= req.body.id;
-  if(id === undefined){
-    return res.json(null)
+app.post("/username", async (req, res) => {
+  console.log("request ", req);
+  const id = req.body.id;
+  if (id === undefined) {
+    return res.json(null);
   }
-  return new Promise((resolve, reject) => {
-    const sql = `SELECT name FROM users WHERE id = ?`;
-    db.query(sql, [id], (err, results) => {
-      if (err) {
-        reject(err);
-      } else if (results.length === 0) {
-        reject(new Error("No user found for the provided id"));
-      } else {
-        console.log("get_user_name ", results[0].name);
-        data = results[0].name
-        return res.json(data);
-      }
-    });
-  });
+  try {
+    const name = await get_user_name(id);
+    console.log("get_user_name ", name);
+    return res.json(name);
+  } catch (err) {
+    console.error(err);
+    return res.json(null);
+  }
   // try {
   //   const username = get_user_name(id);
   //   console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&s", username)
@@ -1060,97 +893,53 @@ app.post("/username", (req, res) => {
 
 
 
-function notes_updateVote(req, newValue, existingVoteid, existingvotevalue) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE note_vote SET value = ? WHERE id = ?",
-      [newValue, existingVoteid],
-      async (err, updateResult) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        }
-        await notes_updateRating(req, existingvotevalue, newValue);
-        // console.log(updateResult);
-        resolve(updateResult);
-      }
-    );
-  });
+async function notes_updateVote(req, newValue, existingVoteid, existingvotevalue) {
+  const updateResult = await NoteVote.updateOne(
+    { id: existingVoteid },
+    { $set: { value: newValue } }
+  );
+  await notes_updateRating(req, existingvotevalue, newValue);
+  return updateResult;
 }
 
 async function notes_addVote(req, user_id, target_id, vote_type, is_comment) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "INSERT INTO note_vote (user_id, note_id, value) VALUES (?, ?, ?)",
-      [user_id, target_id, vote_type],
-      async (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-        await notes_addRating(req);
-        // console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
+  const insertResult = await NoteVote.create({
+    id: await nextId("note_vote"),
+    user_id,
+    note_id: target_id,
+    value: vote_type,
   });
+  await notes_addRating(req);
+  return insertResult;
 }
-function notes_addRating(req) {
+async function notes_addRating(req) {
   // add rating
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE notes SET rating = rating+? WHERE id = ?",
-      [req.body.vote_type, req.body.target_id],
-      (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-
-        // console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
-}
-
-function notes_updateRating(req, existingvalue, newValue) {
-  // rating - existingvalue + newValue
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE notes SET rating = rating-?+? WHERE id = ?",
-      [existingvalue, newValue, req.body.target_id],
-      (err, insertResult) => {
-        if (err) {
-          // console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-          console.error(err);
-          reject(err);
-        }
-
-        // console.log(insertResult);
-        resolve(insertResult);
-      }
-    );
-  });
-}
-
-
-app.post("/noterating", (req, res) => {
-  db.query(
-    "SELECT rating FROM notes WHERE id = ?",
-    [req.body.target_id],
-    (err, getVote) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(getVote);
-    }
+  const insertResult = await Note.updateOne(
+    { id: req.body.target_id },
+    { $inc: { rating: req.body.vote_type } }
   );
+  return insertResult;
+}
+
+async function notes_updateRating(req, existingvalue, newValue) {
+  // rating - existingvalue + newValue
+  const delta = -existingvalue + newValue;
+  const insertResult = await Note.updateOne(
+    { id: req.body.target_id },
+    { $inc: { rating: delta } }
+  );
+  return insertResult;
+}
+
+
+app.post("/noterating", async (req, res) => {
+  try {
+    const notes = await Note.find({ id: req.body.target_id }).select({ rating: 1 });
+    return res.json(notes.map((n) => ({ rating: n.rating })));
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 });
 
 app.post("/noteuservote", async (req, res) => {
@@ -1159,20 +948,17 @@ app.post("/noteuservote", async (req, res) => {
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  const user_id = await get_author_id(token);
-  db.query(
-    "SELECT value FROM note_vote WHERE note_id = ? AND user_id = ?",
-    [req.body.target_id, user_id],
-    (err, getVote) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(getVote);
-    }
-  );
+  try {
+    const user_id = await get_author_id(token);
+    const votes = await NoteVote.find({
+      note_id: req.body.target_id,
+      user_id,
+    }).select({ value: 1 });
+    return res.json(votes.map((v) => ({ value: v.value })));
+  } catch (err) {
+    console.error(err);
+    return res.json("Error");
+  }
 });
 
 app.post("/notevote", async (req, res) => {
@@ -1183,460 +969,412 @@ app.post("/notevote", async (req, res) => {
   }
   console.log(req);
 
-  const user_id = await get_author_id(token);
-  console.log("---------" + user_id);
-  const sql = `SELECT * FROM note_vote WHERE user_id = ? AND note_id = ?`;
-  const values = [user_id, req.body.target_id];
-  new Promise((resolve, reject) => {
-    db.query(sql, values, (err, results) => {
-      if (err) {
-        console.log(err + "H");
-        reject(err);
-      } else {
-        // console.log("***********" + results);
-        resolve(results);
-      }
-    });
-  })
-    .then(async (results) => {
-      if (results.length > 0) {
-        const existingVote = results[0];
-        const newValue =
-          existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
-        console.log("U");
-        try {
-          await notes_updateVote(req, newValue, existingVote.id, results[0].value);
+  try {
+    const user_id = await get_author_id(token);
+    console.log("---------" + user_id);
 
-          return res.json(results);
-        } catch (updateError) {
-          console.error(updateError);
-          return res.json("Error updating vote");
-        }
-      } else {
-        console.log("i");
-        try {
-          await notes_addVote(
-            req,
-            user_id,
-            req.body.target_id,
-            req.body.vote_type,
-          );
-
-          return res.json("done");
-        } catch (addError) {
-          console.error(addError);
-          return res.json("Error adding vote");
-        }
+    const results = await NoteVote.find({ user_id, note_id: req.body.target_id });
+    if (results.length > 0) {
+      const existingVote = results[0];
+      const existingVoteJson = [existingVote.toJSON()];
+      const newValue =
+        existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
+      console.log("U");
+      try {
+        await notes_updateVote(req, newValue, existingVote.id, existingVote.value);
+        return res.json(existingVoteJson);
+      } catch (updateError) {
+        console.error(updateError);
+        return res.json("Error updating vote");
       }
-    })
-    .catch((error) => {
-      console.error(error);
-      return res.json("Error querying database");
-    });
+    } else {
+      console.log("i");
+      try {
+        await notes_addVote(req, user_id, req.body.target_id, req.body.vote_type);
+        return res.json("done");
+      } catch (addError) {
+        console.error(addError);
+        return res.json("Error adding vote");
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    return res.json("Error querying database");
+  }
 });
 
 
 
-app.post("/question_marked", async (req, res) =>{
+app.post("/question_marked", async (req, res) => {
   const token = req.cookies.token;
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
   
-  try{
+  try {
     const user_id = await get_author_id(token);
-    const sql = `INSERT INTO marked_questions (user_id, question_id) VALUES (?, ?)`;
-    db.query(sql, [user_id, req.body.question_id], (err, result) => {
-      if (err) {
-        console.error('Error inserting marked question into database:', err);
-        return res.status(500).json({ message: "Error inserting marked que into database." });
-      }
-      console.log('marked que inserted successfully:', result);
+    try {
+      const result = await MarkedQuestion.create({
+        id: await nextId("marked_questions"),
+        user_id,
+        question_id: req.body.question_id,
+      });
+      console.log("marked que inserted successfully:", result);
       return res.status(200).json({ message: "marked que uploaded successfully." });
-    });
-  }catch (error) {
-    console.error('Error uploading marked que:', error);
+    } catch (err) {
+      console.error("Error inserting marked question into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting marked que into database." });
+    }
+  } catch (error) {
+    console.error("Error uploading marked que:", error);
+    return res.status(500).json({ message: "Error inserting marked que into database." });
   }
 });
-app.post("/note_marked", async (req, res) =>{
+app.post("/note_marked", async (req, res) => {
   const token = req.cookies.token;
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
   
-  try{
+  try {
     const user_id = await get_author_id(token);
-    const sql = `INSERT INTO marked_notes (user_id, note_id) VALUES (?, ?)`;
-    db.query(sql, [user_id, req.body.note_id], (err, result) => {
-      if (err) {
-        console.error('Error inserting marked note into database:', err);
-        return res.status(500).json({ message: "Error inserting marked note into database." });
-      }
-      console.log('marked note inserted successfully:', result);
+    try {
+      const result = await MarkedNote.create({
+        id: await nextId("marked_notes"),
+        user_id,
+        note_id: req.body.note_id,
+      });
+      console.log("marked note inserted successfully:", result);
       return res.status(200).json({ message: "marked note uploaded successfully." });
-    });
-  }catch (error) {
-    console.error('Error uploading marked note:', error);
+    } catch (err) {
+      console.error("Error inserting marked note into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting marked note into database." });
+    }
+  } catch (error) {
+    console.error("Error uploading marked note:", error);
+    return res
+      .status(500)
+      .json({ message: "Error inserting marked note into database." });
   }
 });
-app.post("/question_unmarked", async (req, res) =>{
+app.post("/question_unmarked", async (req, res) => {
   const token = req.cookies.token;
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
   
-  try{
+  try {
     const user_id = await get_author_id(token);
-    const sql = `DELETE FROM marked_questions 
-WHERE user_id = ? 
-  AND question_id = ?;`;
-    db.query(sql, [user_id, req.body.question_id], (err, result) => {
-      if (err) {
-        console.error('Error inserting marked question into database:', err);
-        return res.status(500).json({ message: "Error inserting marked que into database." });
-      }
-      console.log('marked que inserted successfully:', result);
+    try {
+      const result = await MarkedQuestion.deleteMany({
+        user_id,
+        question_id: req.body.question_id,
+      });
+      console.log("marked que inserted successfully:", result);
       return res.status(200).json({ message: "marked que uploaded successfully." });
-    });
-  }catch (error) {
-    console.error('Error uploading marked que:', error);
+    } catch (err) {
+      console.error("Error inserting marked question into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting marked que into database." });
+    }
+  } catch (error) {
+    console.error("Error uploading marked que:", error);
+    return res.status(500).json({ message: "Error inserting marked que into database." });
   }
 });
-app.post("/note_unmarked", async (req, res) =>{
+app.post("/note_unmarked", async (req, res) => {
   const token = req.cookies.token;
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
   
-  try{
+  try {
     const user_id = await get_author_id(token);
-    const sql = `DELETE FROM marked_notes 
-WHERE user_id = ? 
-  AND note_id = ?;`;
-    db.query(sql, [user_id, req.body.note_id], (err, result) => {
-      if (err) {
-        console.error('Error inserting marked note into database:', err);
-        return res.status(500).json({ message: "Error inserting marked note into database." });
-      }
-      console.log('marked note inserted successfully:', result);
+    try {
+      const result = await MarkedNote.deleteMany({
+        user_id,
+        note_id: req.body.note_id,
+      });
+      console.log("marked note inserted successfully:", result);
       return res.status(200).json({ message: "marked note uploaded successfully." });
-    });
-  }catch (error) {
-    console.error('Error uploading marked note:', error);
+    } catch (err) {
+      console.error("Error inserting marked note into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting marked note into database." });
+    }
+  } catch (error) {
+    console.error("Error uploading marked note:", error);
+    return res
+      .status(500)
+      .json({ message: "Error inserting marked note into database." });
   }
 });
-app.post("/ismarked", async (req, res) =>{
+app.post("/ismarked", async (req, res) => {
   const token = req.cookies.token;
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  try{
+  try {
     const user_id = await get_author_id(token);
-    const sql = `SELECT EXISTS (
-    SELECT 1 
-    FROM marked_questions 
-    WHERE user_id = ? 
-      AND question_id = ?
-) AS row_exists;
-`;
-    db.query(sql, [user_id, req.body.question_id], (err, result) => {
-      if (err) {
-        console.error('Error inserting marked question into database:', err);
-        return res.status(500).json({ message: "Error inserting marked que into database." });
-      }
-      console.log('marked que inserted successfully:', result);
+    try {
+      const exists = await MarkedQuestion.exists({
+        user_id,
+        question_id: req.body.question_id,
+      });
+      const result = [{ row_exists: exists ? 1 : 0 }];
+      console.log("marked que inserted successfully:", result);
       return res.status(200).json({ result });
-    });
-  }catch (error) {
-    console.error('Error uploading marked que:', error);
+    } catch (err) {
+      console.error("Error inserting marked question into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting marked que into database." });
+    }
+  } catch (error) {
+    console.error("Error uploading marked que:", error);
+    return res.status(500).json({ message: "Error inserting marked que into database." });
   }
 });
-app.post("/ismarkednote", async (req, res) =>{
+app.post("/ismarkednote", async (req, res) => {
   const token = req.cookies.token;
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  try{
+  try {
     const user_id = await get_author_id(token);
-    const sql = `SELECT EXISTS (
-    SELECT 1 
-    FROM marked_notes 
-    WHERE user_id = ? 
-      AND note_id = ?
-) AS row_exists;
-`;
-    db.query(sql, [user_id, req.body.note_id], (err, result) => {
-      if (err) {
-        console.error('Error inserting marked note into database:', err);
-        return res.status(500).json({ message: "Error inserting marked note into database." });
-      }
-      console.log('marked note inserted successfully:', result);
+    try {
+      const exists = await MarkedNote.exists({
+        user_id,
+        note_id: req.body.note_id,
+      });
+      const result = [{ row_exists: exists ? 1 : 0 }];
+      console.log("marked note inserted successfully:", result);
       return res.status(200).json({ result });
-    });
-  }catch (error) {
-    console.error('Error uploading marked note:', error);
+    } catch (err) {
+      console.error("Error inserting marked note into database:", err);
+      return res
+        .status(500)
+        .json({ message: "Error inserting marked note into database." });
+    }
+  } catch (error) {
+    console.error("Error uploading marked note:", error);
+    return res
+      .status(500)
+      .json({ message: "Error inserting marked note into database." });
   }
 });
 
 //tags search
-app.get("/alltags", (req, res) => {
+app.get("/alltags", async (req, res) => {
   try {
-    db.query("SELECT * FROM tags", (err, data) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(data);
-    });
+    const data = await Tag.find({});
+    return res.json(data);
   } catch (error) {
     console.error(error);
     return res.json("Error");
   }
 });
-app.get("/question_tags", (req, res) => {
+app.get("/question_tags", async (req, res) => {
   try {
-    db.query("SELECT * FROM question_tags", (err, data) => {
-      if (err) {
-        console.error(err);
-        return res.json("Error");
-      }
-      // console.log(data);
-
-      return res.json(data);
-    });
+    const data = await QuestionTag.find({});
+    return res.json(data);
   } catch (error) {
     console.error(error);
     return res.json("Error");
   }
 });
 
-app.get("/questionswithtag", (req, res) => {
+app.get("/questionswithtag", async (req, res) => {
   const tagId = req.query.target_id; // Retrieve tag_id from the query parameters
   
-  const sqlQuery = 'SELECT question_id FROM question_tags WHERE tag_id = ?';
-
-  db.query(sqlQuery, [tagId], (err, results) => {
-    if (err) {
-      console.error("Error fetching questions:", err);
-      return res.status(500).send("Server error");
-    }
-    
-    res.json(results);
-  });
+  try {
+    const results = await QuestionTag.find({ tag_id: tagId }).select({ question_id: 1 });
+    return res.json(results.map((r) => ({ question_id: r.question_id })));
+  } catch (err) {
+    console.error("Error fetching questions:", err);
+    return res.status(500).send("Server error");
+  }
 });
 
-app.get("/questionswithuserid", (req, res) => {
+app.get("/questionswithuserid", async (req, res) => {
   const tagId = req.query.user_id; // Retrieve tag_id from the query parameters
   
-  const sqlQuery = 'SELECT question_id FROM question_tags WHERE author_id = ?';
-
-  db.query(sqlQuery, [tagId], (err, results) => {
-    if (err) {
-      console.error("Error fetching questions:", err);
-      return res.status(500).send("Server error");
-    }
-    
-    res.json(results);
-  });
+  try {
+    const results = await QuestionTag.find({ author_id: tagId }).select({ question_id: 1 });
+    return res.json(results.map((r) => ({ question_id: r.question_id })));
+  } catch (err) {
+    console.error("Error fetching questions:", err);
+    return res.status(500).send("Server error");
+  }
 });
 
 
-app.get("/questionwithIDs", (req, res) => {
-  const questionIds = req.query.ids; // here there will be an array of question IDs
+app.get("/questionwithIDs", async (req, res) => {
+  let questionIds = req.query.ids; // here there will be an array of question IDs
 
   if (!questionIds || questionIds.length === 0) {
     return res.status(400).json({ error: "No question IDs provided" });
   }
 
-  const sqlQuery = `SELECT * FROM questions WHERE id IN (?)`;
-  
-  db.query(sqlQuery, [questionIds], (err, results) => {
-    if (err) {
-      console.error("Error fetching questions:", err);
-      return res.status(500).send("Server error");
-    }
-    
-    res.json(results);
-  });
+  if (typeof questionIds === "string") {
+    questionIds = questionIds.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (!Array.isArray(questionIds)) {
+    questionIds = [questionIds];
+  }
+
+  try {
+    const results = await Question.find({ id: { $in: questionIds } });
+    return res.json(results);
+  } catch (err) {
+    console.error("Error fetching questions:", err);
+    return res.status(500).send("Server error");
+  }
 });
 
-app.get("/top-questions", (req, res) => {
-  const sqlQuery = `SELECT * FROM questions ORDER BY rating DESC LIMIT 10`;
-
-  db.query(sqlQuery, (err, results) => {
-    if (err) {
-      console.error("Error fetching top questions:", err);
-      return res.status(500).send("Server error");
-    }
-    
-    res.json(results);
-  });
+app.get("/top-questions", async (req, res) => {
+  try {
+    const results = await Question.find({}).sort({ rating: -1 }).limit(10);
+    return res.json(results);
+  } catch (err) {
+    console.error("Error fetching top questions:", err);
+    return res.status(500).send("Server error");
+  }
 });
 
-app.get("/top-notes", (req, res) => {
-  const sqlQuery = `SELECT * FROM notes ORDER BY rating DESC LIMIT 6`;
-
-  db.query(sqlQuery, (err, results) => {
-    if (err) {
-      console.error("Error fetching top questions:", err);
-      return res.status(500).send("Server error");
-    }
-    
-    res.json(results);
-  });
+app.get("/top-notes", async (req, res) => {
+  try {
+    const results = await Note.find({}).sort({ rating: -1 }).limit(6);
+    return res.json(results);
+  } catch (err) {
+    console.error("Error fetching top questions:", err);
+    return res.status(500).send("Server error");
+  }
 });
 
 
 // Define the route to fetch questions by user_id
-app.get('/api/questions/user/:userId', (req, res) => {
+app.get('/api/questions/user/:userId', async (req, res) => {
   const userId = req.params.userId;
 
-  // SQL query to fetch questions by user_id
-  db.query('SELECT * FROM questions WHERE author_id = ?', [userId], (error, results) => {
-      if (error) {
-          console.error('Error fetching questions:', error);
-          res.status(500).json({ error: 'Failed to fetch questions' });
-      } else {
-          res.json(results); // Send the results back as JSON
-      }
-  });
+  try {
+    const results = await Question.find({ author_id: userId });
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching questions:', error);
+    return res.status(500).json({ error: 'Failed to fetch questions' });
+  }
 });
-app.get('/api/notes/user/:userId', (req, res) => {
+app.get('/api/notes/user/:userId', async (req, res) => {
   const userId = req.params.userId;
 
-  // SQL query to fetch questions by user_id
-  db.query('SELECT * FROM notes WHERE author_id = ?', [userId], (error, results) => {
-      if (error) {
-          console.error('Error fetching questions:', error);
-          res.status(500).json({ error: 'Failed to fetch questions' });
-      } else {
-          res.json(results); // Send the results back as JSON
-      }
-  });
+  try {
+    const results = await Note.find({ author_id: userId });
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching questions:', error);
+    return res.status(500).json({ error: 'Failed to fetch questions' });
+  }
 });
 
 
-app.get('/api/questions/liked/:userId', (req, res) => {
+app.get('/api/questions/liked/:userId', async (req, res) => {
   const userId = req.params.userId;
-
-  const query = `
-      SELECT q.*
-      FROM questions q
-      INNER JOIN votes v ON q.id = v.question_id
-      WHERE v.user_id = ? AND v.value = 1
-  `;
-
-  db.query(query, [userId], (error, results) => {
-      if (error) {
-          console.error('Error fetching liked questions:', error);
-          res.status(500).json({ error: 'Failed to fetch liked questions' });
-      } else {
-          res.json(results);
-      }
-  });
+  try {
+    const votes = await Vote.find({ user_id: userId, value: 1 }).select({
+      question_id: 1,
+    });
+    const questionIds = votes.map((v) => v.question_id).filter((id) => id != null);
+    const results = await Question.find({ id: { $in: questionIds } });
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching liked questions:', error);
+    return res.status(500).json({ error: 'Failed to fetch liked questions' });
+  }
 });
 app.get('/api/questions/marked', async (req, res) => {
   
   const token = req.cookies.token;
-  {if (!token) {
+  {
+    if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
 
   const user_id =  await get_author_id(token);
-
-  const query = `
-      SELECT q.*
-      FROM questions q
-      JOIN marked_questions mq ON q.id = mq.question_id
-      WHERE mq.user_id = ?
-  `;
-
-  db.query(query, [user_id], (error, results) => {
-      if (error) {
-          console.error('Error fetching liked questions:', error);
-          res.status(500).json({ error: 'Failed to fetch liked questions' });
-      } else {
-          res.json(results);
-          // console.log(user_id)
-      }
-  });}
+  try {
+    const marked = await MarkedQuestion.find({ user_id }).select({ question_id: 1 });
+    const questionIds = marked.map((m) => m.question_id).filter((id) => id != null);
+    const results = await Question.find({ id: { $in: questionIds } });
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching liked questions:', error);
+    return res.status(500).json({ error: 'Failed to fetch liked questions' });
+  }
+  }
 });
 app.get('/api/notes/marked', async (req, res) => {
   
   const token = req.cookies.token;
-  {if (!token) {
+  {
+    if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
 
   const user_id =  await get_author_id(token);
-
-  const query = `
-      SELECT q.*
-      FROM notes q
-      JOIN marked_notes mq ON q.id = mq.note_id
-      WHERE mq.user_id = ?
-  `;
-
-  db.query(query, [user_id], (error, results) => {
-      if (error) {
-          console.error('Error fetching liked questions:', error);
-          res.status(500).json({ error: 'Failed to fetch liked questions' });
-      } else {
-          res.json(results);
-          // console.log(user_id)
-      }
-  });}
+  try {
+    const marked = await MarkedNote.find({ user_id }).select({ note_id: 1 });
+    const noteIds = marked.map((m) => m.note_id).filter((id) => id != null);
+    const results = await Note.find({ id: { $in: noteIds } });
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching liked questions:', error);
+    return res.status(500).json({ error: 'Failed to fetch liked questions' });
+  }
+  }
 });
-app.get('/api/notes/liked/:userId', (req, res) => {
+app.get('/api/notes/liked/:userId', async (req, res) => {
   const userId = req.params.userId;
-
-  const query = `
-      SELECT n.*
-      FROM notes n
-      INNER JOIN note_vote v ON n.id = v.note_id
-      WHERE v.user_id = ? AND v.value = 1
-  `;
-
-  db.query(query, [userId], (error, results) => {
-      if (error) {
-          console.error('Error fetching liked questions:', error);
-          res.status(500).json({ error: 'Failed to fetch liked questions' });
-      } else {
-          res.json(results);
-      }
-  });
+  try {
+    const votes = await NoteVote.find({ user_id: userId, value: 1 }).select({
+      note_id: 1,
+    });
+    const noteIds = votes.map((v) => v.note_id).filter((id) => id != null);
+    const results = await Note.find({ id: { $in: noteIds } });
+    return res.json(results);
+  } catch (error) {
+    console.error('Error fetching liked questions:', error);
+    return res.status(500).json({ error: 'Failed to fetch liked questions' });
+  }
 });
 
 app.get('/api/tags/:questionId', async (req, res) => {
   try {
       const questionId = req.params.questionId;
-      const query = `SELECT t.id AS tag_id, t.name AS tag_name FROM tags t JOIN question_tags qt ON t.id = qt.tag_id WHERE qt.question_id = ?`;
-      db.query(query, [questionId], (err, results) => {
-          if (err) {
-              res.status(500).json({ error: 'Database error' });
-          } else {
-              res.json(results);  // only results are sent as JSON
-          }
+      const links = await QuestionTag.find({ question_id: questionId }).select({
+        tag_id: 1,
       });
+      const tagIds = links.map((l) => l.tag_id).filter((id) => id != null);
+      const tags = await Tag.find({ id: { $in: tagIds } }).select({ id: 1, name: 1 });
+      const results = tags.map((t) => ({ tag_id: t.id, tag_name: t.name }));
+      return res.json(results);  // only results are sent as JSON
   } catch (error) {
-      res.status(500).json({ error: 'Server error' });
+      return res.status(500).json({ error: 'Server error' });
   }
 });
 
 app.get('/api/answers/count/:questionId', async (req, res) => {
   const questionId = req.params.questionId;
   try {
-      const query = `SELECT COUNT(*) AS answer_count FROM comments WHERE question_id = ?`;
-      db.query(query, [questionId], (err, results) => {
-          if (err) {
-              return res.status(500).json({ error: 'Database error' });
-          }
-          res.json(results[0]);  // Returnin the count result
-      });
+      const count = await Comment.countDocuments({ question_id: questionId });
+      return res.json({ answer_count: count }); // Returning the count result
   } catch (error) {
-      res.status(500).json({ error: 'Server error' });
+      return res.status(500).json({ error: 'Server error' });
   }
 });
 
