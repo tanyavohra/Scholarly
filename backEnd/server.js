@@ -15,7 +15,7 @@ const { generateThumbnail } = require('pdf-thumbnail');
 const { Blob } = require('buffer');
 const multer = require('multer');
 const mongoose = require("mongoose");
-mongoose.connect("mongodb+srv://vohratanya5_db_user:px2mtsGrzihQlena@cluster0.c02hzr.mongodb.net/BrainLink?retryWrites=true&w=majority")
+mongoose.connect("mongodb+srv://vohratanya5_db_user:px2mtsGrzihQlena@cluster0.c02hzhr.mongodb.net/BrainLink?retryWrites=true&w=majority")
 require("dotenv").config();
 const upload = multer({
   storage: multer.memoryStorage(),
