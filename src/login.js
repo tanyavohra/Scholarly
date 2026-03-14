@@ -47,7 +47,12 @@ function Login() {
           }
           console.log(values);
         })
-        .catch((err) => console.log(err));
+        .catch((err) => {
+          const status = err?.response?.status;
+          const message = err?.response?.data?.Message || err?.response?.data?.error || err?.message;
+          console.error("Login failed:", { status, message, err });
+          alert(message || "Login failed");
+        });
     }else{
       // alert(errors.password)
     }
@@ -100,9 +105,11 @@ function Login() {
             }
           })
           .catch((err) => {
-            console.log("409")
-            alert("Username already exists")
-            console.log(err)});
+            const status = err?.response?.status;
+            const message = err?.response?.data?.Message || err?.response?.data?.error || err?.message;
+            console.error("Signup failed:", { status, message, err });
+            alert(message || "Signup failed");
+          });
       }
     }
   };
