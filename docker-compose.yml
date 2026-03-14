@@ -1,0 +1,63 @@
+services:
+  db:
+    image: mysql:8.4
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: signup
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  python-api:
+    build:
+      context: ./backEnd
+      dockerfile: Dockerfile.python
+    environment:
+      PORT: 8082
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FAISS_DIR: /data/faiss_index
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      HUGGINGFACEHUB_API_TOKEN: ${HUGGINGFACEHUB_API_TOKEN:-}
+    volumes:
+      - faiss_data:/data
+    ports:
+      - "8082:8082"
+
+  api:
+    build:
+      context: ./backEnd
+      dockerfile: Dockerfile.node
+    depends_on:
+      - db
+      - python-api
+    environment:
+      NODE_ENV: production
+      PORT: 8081
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
+      DB_NAME: signup
+      PYTHON_BASE_URL: http://python-api:8082
+    ports:
+      - "8081:8081"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-http://localhost:8081}
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
+  faiss_data:
+

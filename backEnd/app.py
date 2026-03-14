@@ -1,17 +1,32 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pdf_utils import get_pdf_text, get_text_chunks, get_vector_store, answer_question
 
 import os
-print("HUGGINGFACEHUB_API_TOKEN loaded:", bool(os.getenv("HUGGINGFACEHUB_API_TOKEN")))
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "http://localhost:8081"])
+
+def _parse_origins(value: str):
+    return [o.strip() for o in (value or "").split(",") if o.strip()]
+
+CORS(
+    app,
+    origins=_parse_origins(os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8081")),
+)
 
 
-FAISS_DIR = "faiss_index"  # folder where index is saved
+FAISS_DIR = os.getenv("FAISS_DIR", "faiss_index")  # folder where index is saved
+os.makedirs(FAISS_DIR, exist_ok=True)
+
+
+@app.get("/healthz")
+def healthz():
+    return jsonify({"status": "ok"}), 200
 
 @app.route("/process_pdf", methods=["POST"])
 def process_pdf():
@@ -62,4 +77,6 @@ def ask_question_route():
 
 if __name__ == "__main__":
     # Run with python app.py (good for dev). For production, use gunicorn / uvicorn + reverse proxy.
-    app.run(host="0.0.0.0", port=8082, debug=True)
+    port = int(os.getenv("PORT") or os.getenv("PY_PORT") or "8082")
+    debug = (os.getenv("FLASK_DEBUG") or "").lower() in ("1", "true", "yes", "on")
+    app.run(host="0.0.0.0", port=port, debug=debug)

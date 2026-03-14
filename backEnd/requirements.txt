@@ -7,3 +7,4 @@ langchain-google-genai
 langchain-community
 google-generativeai
 faiss-cpu   # or faiss-gpu if you need GPU
+gunicorn

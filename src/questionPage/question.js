@@ -21,6 +21,7 @@ import {
 import { storage } from "../Firebase";
 import { v4 } from "uuid";
 import { eventNames } from "process";
+import { API_BASE_URL } from "../config";
 
 
 
@@ -63,7 +64,7 @@ const Question = ({ isOpen, toggle }) => {
   const fetchTags = async (questionId) => {
     console.log(questionId);
     const response = await fetch(
-      `http://localhost:8081/api/tags/${questionId}`
+      `${API_BASE_URL}/api/tags/${questionId}`
     );
     const data = await response.text(); // Change to text to inspect the raw response
     console.log(data); // This will help you see if the response is HTML or JSON

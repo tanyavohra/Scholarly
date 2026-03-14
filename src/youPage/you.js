@@ -8,6 +8,7 @@ import { Container } from "reactstrap";
 import userImg from '../user.png';
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { safeFormatDistance } from "../utils/date";
+import { API_BASE_URL } from "../config";
 
 
 const You = ({ isOpen }) => {
@@ -25,7 +26,7 @@ const You = ({ isOpen }) => {
   const fetchTags = async (questionId) => {
     console.log(questionId);
     const response = await fetch(
-      `http://localhost:8081/api/tags/${questionId}`
+      `${API_BASE_URL}/api/tags/${questionId}`
     );
     const data = await response.text(); // Change to text to inspect the raw response
     console.log(data); // This will help you see if the response is HTML or JSON
@@ -40,7 +41,7 @@ const You = ({ isOpen }) => {
 
   const fetchAnswerCount = async (questionId) => {
     try {
-        const response = await fetch(`http://localhost:8081/api/answers/count/${questionId}`);
+        const response = await fetch(`${API_BASE_URL}/api/answers/count/${questionId}`);
         const { answer_count } = await response.json();
         setAnswer_count((prev) => ({
           ...prev,

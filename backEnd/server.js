@@ -14,31 +14,91 @@ const bcrypt = require('bcrypt');
 const { generateThumbnail } = require('pdf-thumbnail');
 const { Blob } = require('buffer');
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: parseInt(process.env.MAX_UPLOAD_BYTES || `${25 * 1024 * 1024}`, 10), // 25 MiB default
+  },
+});
 const FormData = require('form-data'); // If using node-fetch or axios, still use form-data
 
+const PORT = parseInt(process.env.PORT || "8081", 10);
+const JWT_SECRET = process.env.JWT_SECRET || "dev-insecure-change-me";
+const PYTHON_BASE_URL = (process.env.PYTHON_BASE_URL || "http://localhost:8082").replace(/\/+$/, "");
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (process.env.NODE_ENV === "production" && JWT_SECRET === "dev-insecure-change-me") {
+  console.warn("JWT_SECRET is not set; set it in production.");
+}
+
+app.set("trust proxy", 1);
+
 app.get('/pdf-thumbnail', async (req, res) => {
-  const pdfUrl = req.query.url;
-  const thumbnail = await generateThumbnail(pdfUrl);
-  res.type('image/jpeg').send(thumbnail);
+  try {
+    const pdfUrl = req.query.url;
+    if (!pdfUrl) return res.status(400).json({ error: "Missing url" });
+
+    const parsed = new URL(pdfUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return res.status(400).json({ error: "Invalid url protocol" });
+    }
+
+    const thumbnail = await generateThumbnail(pdfUrl);
+    res.type('image/jpeg').send(thumbnail);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to generate thumbnail" });
+  }
 });
 
 
-app.use(
-  cors({
-    origin: ["http://localhost:3000"],
-    methods: ["POST", "GET"],
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser clients (no Origin) and allowlisted browser origins.
+    if (!origin) return callback(null, true);
+    if (CORS_ORIGINS.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookiesParser());
 
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "signup",
+const db = mysql.createPool({
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT || "3306", 10),
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "signup",
+  waitForConnections: true,
+  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || "10", 10),
+  queueLimit: 0,
+});
+
+function cookieOptions() {
+  const isProd = process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProd,
+  };
+}
+
+app.get("/healthz", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.get("/readyz", async (req, res) => {
+  try {
+    await db.promise().query("SELECT 1");
+    await axios.get(`${PYTHON_BASE_URL}/healthz`, { timeout: 3000 });
+    res.json({ status: "ready" });
+  } catch (e) {
+    res.status(503).json({ status: "not_ready" });
+  }
 });
 
 //idint = 5;
@@ -101,7 +161,7 @@ const verifyUser = (req, res, next) => {
   if (!token) {
     return res.json({ Message: "We need token Provoide it..." });
   } else {
-    jwt.verify(token, "secret-key", (err, decode) => {
+    jwt.verify(token, JWT_SECRET, (err, decode) => {
       if (err) {
         return res.json({ Message: "Authentication error" });
       } else {
@@ -192,8 +252,8 @@ app.post("/login", (req, res) => {
     
     if (validPassword) {
         console.log("YEeY validpass")
-        const token = jwt.sign({ name: data[0].name }, "secret-key", { expiresIn: "1d" });
-        res.cookie("token", token);
+        const token = jwt.sign({ name: data[0].name }, JWT_SECRET, { expiresIn: "1d" });
+        res.cookie("token", token, cookieOptions());
         updateToken(values[0], token);
         return res.json({ Status: "Success" });
       } else {
@@ -218,8 +278,8 @@ function checkPass(req, res, values) {
         }
         if (data.length > 0) {
           const name = data[0].name;
-          const token = jwt.sign({ name }, "secret-key", { expiresIn: "1d" });
-          res.cookie("token", token);
+          const token = jwt.sign({ name }, JWT_SECRET, { expiresIn: "1d" });
+          res.cookie("token", token, cookieOptions());
 
           updateToken(values[0], token);
 
@@ -234,7 +294,7 @@ function checkPass(req, res, values) {
 }
 
 app.get("/logout", (req, res) => {
-  res.clearCookie("token");
+  res.clearCookie("token", cookieOptions());
   return res.json({ Status: "Success" });
 });
 
@@ -1592,7 +1652,7 @@ app.post('/processpdf', upload.array('pdfFiles'), async (req, res) => {
       });
 
       // Send the form data to another server
-      const response = await axios.post('http://localhost:8082/process_pdf', formData, {
+      const response = await axios.post(`${PYTHON_BASE_URL}/process_pdf`, formData, {
           headers: formData.getHeaders()
       });
 
@@ -1607,7 +1667,7 @@ app.post('/processpdf', upload.array('pdfFiles'), async (req, res) => {
 app.post('/ask_question', async (req, res) => {
   try {
       const { question } = req.body;
-      const response = await axios.post('http://localhost:8082/ask_question', { question });
+      const response = await axios.post(`${PYTHON_BASE_URL}/ask_question`, { question });
 
       res.json(response.data);
   } catch (error) {
@@ -1617,20 +1677,6 @@ app.post('/ask_question', async (req, res) => {
 
 
 
-app.listen(8081, () => {
-  console.log("listening");
+app.listen(PORT, () => {
+  console.log(`listening on ${PORT}`);
 });
-
-
-
-
-/* user0 password = UtS$0033 */
-/* Soham password = Cs23b#1068 */
-/* catman = CtU$0033 */
-/* Kahnaiiya = KtU$0033*/
-/* Keyboard_warrior = KtU$0033*/
-/* Keyboard_warrior = KtU$0033*/
-/* BrainyScholar = BrtU$0033 */
-/* NoteNinja NotU$0033 */
-/* SmartyPants SmtU$0033 */
-/* CuriosityCat CutU$0033 */
