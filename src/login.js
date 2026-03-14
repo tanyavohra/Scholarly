@@ -21,6 +21,17 @@ function Login() {
 
   const navigate = useNavigate();
 
+  const getRequestErrorMessage = (err) => {
+    const data = err?.response?.data;
+    return (
+      data?.Message ||
+      data?.message ||
+      data?.error ||
+      err?.message ||
+      ""
+    );
+  };
+
   const [errors, setErrors] = useState({});
   const handleInput = (event) => {
     setValues((prev) => ({
@@ -49,8 +60,11 @@ function Login() {
         })
         .catch((err) => {
           const status = err?.response?.status;
-          const message = err?.response?.data?.Message || err?.response?.data?.error || err?.message;
-          console.error("Login failed:", { status, message, err });
+          const message = getRequestErrorMessage(err);
+          console.error(
+            `Login failed${status ? ` (${status})` : ""}: ${message || "Request failed"}`,
+            err
+          );
           alert(message || "Login failed");
         });
     }else{
@@ -72,7 +86,6 @@ function Login() {
       [event.target.name]: event.target.value,
     }));
   };
-  console.log(signvalues);
 
   const handleSignSubmit = (event) => {
     event.preventDefault();
@@ -81,8 +94,6 @@ function Login() {
     // console.log(signerrors)
     // console.log(signerrors.email)
     // console.log(signerrors.password)
-    console.log(signvalues.password);
-    console.log(signvalues.confpass);
     if (signvalues.password !== signvalues.confpass) {
       alert("Reconfirm the password!!!");
     } else {
@@ -106,8 +117,11 @@ function Login() {
           })
           .catch((err) => {
             const status = err?.response?.status;
-            const message = err?.response?.data?.Message || err?.response?.data?.error || err?.message;
-            console.error("Signup failed:", { status, message, err });
+            const message = getRequestErrorMessage(err);
+            console.error(
+              `Signup failed${status ? ` (${status})` : ""}: ${message || "Request failed"}`,
+              err
+            );
             alert(message || "Signup failed");
           });
       }
