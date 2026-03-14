@@ -14,6 +14,8 @@ const bcrypt = require('bcrypt');
 const { generateThumbnail } = require('pdf-thumbnail');
 const { Blob } = require('buffer');
 const multer = require('multer');
+require("dotenv").config();
+mongoose.connect(process.env.MONGO_URI)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
