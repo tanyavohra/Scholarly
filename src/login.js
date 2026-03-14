@@ -25,15 +25,16 @@ function Login() {
   const handleInput = (event) => {
     setValues((prev) => ({
       ...prev,
-      [event.target.name]: [event.target.value],
+      [event.target.name]: event.target.value,
     }));
   };
   //console.log(values);
   axios.defaults.withCredentials = true;
   const handleSubmit = (event) => {
     event.preventDefault();
-    setErrors(LogValidation(values));
-    if (errors.email === "" && errors.password === "") {
+    const nextErrors = LogValidation(values);
+    setErrors(nextErrors);
+    if (nextErrors.email === "" && nextErrors.password === "") {
       axios
         .post("http://localhost:8081/login", values)
         .then((res) => {
@@ -63,26 +64,27 @@ function Login() {
   const handleSignInput = (event) => {
     setSignValues((prev) => ({
       ...prev,
-      [event.target.name]: [event.target.value],
+      [event.target.name]: event.target.value,
     }));
   };
   console.log(signvalues);
 
   const handleSignSubmit = (event) => {
     event.preventDefault();
-    setsignErrors(Validation(signvalues));
+    const nextSignErrors = Validation(signvalues);
+    setsignErrors(nextSignErrors);
     // console.log(signerrors)
     // console.log(signerrors.email)
     // console.log(signerrors.password)
     console.log(signvalues.password);
     console.log(signvalues.confpass);
-    if (signvalues.password[0] !== signvalues.confpass[0]) {
+    if (signvalues.password !== signvalues.confpass) {
       alert("Reconfirm the password!!!");
     } else {
       if (
-        signerrors.name === "" &&
-        signerrors.email === "" &&
-        signerrors.password === ""
+        nextSignErrors.name === "" &&
+        nextSignErrors.email === "" &&
+        nextSignErrors.password === ""
       ) {
         console.log("CLICK");
         axios
