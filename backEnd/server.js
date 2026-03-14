@@ -138,6 +138,13 @@ app.post("/signup", async (req, res) => {
   const saltRounds = 10;
 
   try {
+    if (!process.env.MONGO_URI) {
+      return res.status(503).json({ Message: "Server not configured (MONGO_URI missing)" });
+    }
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ Message: "Database not connected" });
+    }
+
     if (await checkPrevRecord(req)) {
       // console.log("LA")
       return res.json({ Message: "Already Registered" });
@@ -145,29 +152,39 @@ app.post("/signup", async (req, res) => {
       console.log("AL");
       const hashedPassword = await bcrypt.hash(req.body.password.toString(), 9);
 
-      try {
-        await User.create({
-          id: await nextId("users"),
-          name: req.body.name,
-          email: req.body.email,
-          password: hashedPassword,
-          token: null,
-        });
-        return res.json({ Status: "Success" });
-      } catch (err) {
-        if (err && err.code === 11000) {
-          return res
-            .status(409)
-            .json({ Message: "Username or Email already exists" });
-        }
-        console.error(err);
-        return res.status(500).json({ Message: "Server Error" });
-      }
-    }
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ Message: "Server Error" });
-  }
+       try {
+         await User.create({
+           id: await nextId("users"),
+           name: req.body.name,
+           email: req.body.email,
+           password: hashedPassword,
+           token: null,
+         });
+         return res.json({ Status: "Success" });
+       } catch (err) {
+         if (err && err.code === 11000) {
+           return res
+             .status(409)
+             .json({ Message: "Username or Email already exists" });
+         }
+         console.error(err);
+         return res.status(500).json({
+           Message:
+             process.env.NODE_ENV === "production"
+               ? "Server Error"
+               : `Server Error: ${err?.message || "unknown error"}`,
+         });
+       }
+     }
+   } catch (err) {
+     console.error(err);
+     return res.status(500).json({
+       Message:
+         process.env.NODE_ENV === "production"
+           ? "Server Error"
+           : `Server Error: ${err?.message || "unknown error"}`,
+     });
+   }
 });
 
 async function checkPrevRecord(req) {
