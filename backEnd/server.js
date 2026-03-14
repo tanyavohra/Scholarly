@@ -59,6 +59,22 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000")
   .map((s) => s.trim())
   .filter(Boolean);
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // non-browser clients
+  if (CORS_ORIGINS.includes("*")) return true;
+  if (CORS_ORIGINS.includes(origin)) return true;
+
+  // Allow Vercel preview/prod frontends by default (common deployment for this repo).
+  // If you need stricter control, set CORS_ORIGINS explicitly in your environment.
+  try {
+    const url = new URL(origin);
+    if (url.protocol === "https:" && url.hostname.endsWith(".vercel.app")) return true;
+  } catch {
+    // ignore invalid Origin header
+  }
+  return false;
+}
+
 if (process.env.NODE_ENV === "production" && JWT_SECRET === "dev-insecure-change-me") {
   console.warn("JWT_SECRET is not set; set it in production.");
 }
@@ -86,9 +102,9 @@ app.get('/pdf-thumbnail', async (req, res) => {
 app.use(cors({
   origin: (origin, callback) => {
     // Allow non-browser clients (no Origin) and allowlisted browser origins.
-    if (!origin) return callback(null, true);
-    if (CORS_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    // Don't throw (which becomes a 500/HTML error). Return a clean 403 instead.
+    return callback(Object.assign(new Error("Not allowed by CORS"), { statusCode: 403 }));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
@@ -1434,6 +1450,19 @@ app.post('/ask_question', async (req, res) => {
 });
 
 
+
+// Ensure middleware errors (e.g. CORS) return JSON instead of an HTML 500 page.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err?.statusCode || err?.status || 500;
+  const message =
+    status === 403 && err?.message === "Not allowed by CORS"
+      ? "Origin not allowed"
+      : process.env.NODE_ENV === "production"
+        ? "Server Error"
+        : (err?.message || "Server Error");
+  return res.status(status).json({ Message: message });
+});
 
 app.listen(PORT, () => {
   console.log(`listening on ${PORT}`);
