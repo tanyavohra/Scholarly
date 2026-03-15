@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import "./pdfchat.css";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import Modal from "react-modal";
 import { Worker } from "@react-pdf-viewer/core";
 import { Viewer } from "@react-pdf-viewer/core";
 import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import { toolbarPlugin } from "@react-pdf-viewer/toolbar";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
-Modal.setAppElement('#root');
+Modal.setAppElement("#root");
 
 function PdfChat() {
   const location = useLocation();
   const note = location.state?.note;
   const [isProcessed, setIsProcessed] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [response, setResponse] = useState("");
+  const [loading, setLoading] = useState(false);
   // console.log(note);
   
 
@@ -48,9 +51,6 @@ function PdfChat() {
     pdfUrlString = pdf_url;
   }
 
-  const [question, setQuestion] = useState("");
-  const [response, setResponse] = useState("");
-  const [loading, setLoading] = useState(false);
   const pdfFileUrl = pdfUrlString;
   // useEffect(() => {
   //   const processPdf = async () => {
