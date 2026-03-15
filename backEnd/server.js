@@ -29,6 +29,19 @@ const QuestionTag = require("./models/QuestionTag");
 const MarkedQuestion = require("./models/MarkedQuestion");
 const MarkedNote = require("./models/MarkedNote");
 
+let mongoLastError = null;
+mongoose.connection.on("connected", () => {
+  mongoLastError = null;
+  console.log("MongoDB connected");
+});
+mongoose.connection.on("error", (err) => {
+  mongoLastError = err;
+  console.error("MongoDB connection error:", err);
+});
+mongoose.connection.on("disconnected", () => {
+  console.warn("MongoDB disconnected");
+});
+
 async function connectMongo() {
   const mongoUri = process.env.MONGO_URI;
   if (!mongoUri) {
@@ -36,8 +49,12 @@ async function connectMongo() {
     return;
   }
   try {
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: parseInt(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || "8000", 10),
+      connectTimeoutMS: parseInt(process.env.MONGO_CONNECT_TIMEOUT_MS || "8000", 10),
+    });
   } catch (err) {
+    mongoLastError = err;
     console.error("Failed to connect to MongoDB:", err);
   }
 }
@@ -135,17 +152,19 @@ app.get("/readyz", async (req, res) => {
       throw new Error("MONGO_URI is not set");
     }
     if (mongoose.connection.readyState !== 1) {
-      await Promise.race([
-        mongoose.connection.asPromise(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Mongo connect timeout")), 3000)
-        ),
-      ]);
+      const detail =
+        process.env.NODE_ENV === "production"
+          ? ""
+          : (mongoLastError?.message ? ` (${mongoLastError.message})` : "");
+      throw new Error(`Database not connected${detail}`);
     }
     await axios.get(`${PYTHON_BASE_URL}/healthz`, { timeout: 3000 });
     res.json({ status: "ready" });
   } catch (e) {
-    res.status(503).json({ status: "not_ready" });
+    res.status(503).json({
+      status: "not_ready",
+      ...(process.env.NODE_ENV === "production" ? {} : { error: e?.message || "not_ready" }),
+    });
   }
 });
 
@@ -158,7 +177,11 @@ app.post("/signup", async (req, res) => {
       return res.status(503).json({ Message: "Server not configured (MONGO_URI missing)" });
     }
     if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ Message: "Database not connected" });
+      const detail =
+        process.env.NODE_ENV === "production"
+          ? ""
+          : (mongoLastError?.message ? `: ${mongoLastError.message}` : "");
+      return res.status(503).json({ Message: `Database not connected${detail}` });
     }
 
     if (await checkPrevRecord(req)) {
