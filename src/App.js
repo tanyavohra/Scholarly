@@ -25,6 +25,7 @@ import LikedNotes from "./youPage/youlikednotes.js";
 import MarkedQue from "./marked/markedQue.js";
 import MarkedNotes from "./marked/markedNote.js";
 import PdfChat from "./chat_with_pdf.js/pdfChat.js";
+import Contact from "./Contact";
 
 function App() {
   const [sidebarIsOpen, setSidebarOpen] = useState(true);
@@ -97,6 +98,7 @@ function App() {
                       element={<Note isOpen={sidebarIsOpen} />}
                     />
                     <Route path="/addnote" element={<AddNote />} />
+                    <Route path="/contact" element={<Contact />} />
                     <Route
                       path="/questions"
                       element={
