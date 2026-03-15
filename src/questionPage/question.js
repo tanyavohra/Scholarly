@@ -1,26 +1,14 @@
-import { React, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import classNames from "classnames";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import "./questionPage.css";
 import axios from "axios";
-import { useState } from "react";
 import CommentList from "./commentList";
 import ImageComponent from './imageComponent';
 import userImg from "../user.png";
 import { safeFormatDistance } from "../utils/date";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {faBookmark} from "@fortawesome/free-solid-svg-icons";
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-  listAll,
-  list,
-} from "firebase/storage";
-import { storage } from "../Firebase";
-import { v4 } from "uuid";
-import { eventNames } from "process";
 import { API_BASE_URL } from "../config";
 
 
@@ -29,28 +17,6 @@ const Question = ({ isOpen, toggle }) => {
   const location = useLocation();
   const question = location.state?.question;
   const [isMarked, setIsMarked]  = useState("");
-  const [imageUpload, setImageUpload] = useState(null);
-  // const [imageUrls, setImageUrls] = useState([]);
-  const imagesListRef = ref(storage, "queimages/");
-  var imageRef="";
-  const submitImage = (event) => {
-    event.preventDefault();
-    if (imageUpload == null) {
-      alert("No Image uplaod")
-      return;}
-    imageRef = ref(storage, `ansimages/${imageUpload.name + v4()}`);
-    uploadBytes(imageRef, imageUpload).then(async (snapshot) => {
-      const imageUrl = await getDownloadURL(snapshot.ref);
-      // setImageUrls((prevImageUrls) => [...prevImageUrls, imageUrl]);
-      setValues((prev) => {
-        const updatedDictionary = { ...prev };
-        updatedDictionary.url = imageUrl;
-
-        return updatedDictionary;
-      });
-      alert("Image Uploaded");
-    });
-  };
   
   const imageUrl = question.image_url;
   const [isUpvoted, setUpvoted] = useState("");
@@ -58,66 +24,62 @@ const Question = ({ isOpen, toggle }) => {
   const [isVotingDisabled, setIsVotingDisabled] = useState(false);
   // const [isDownvotingDisabled, setIsDownvotingDisabled] = useState(false);
   const voteDelay = 800;
-  const [userName, setUserName] = useState({})
+  const [userName, setUserName] = useState("");
   const [questionTags, setQuestionTags] = useState({});
 
-  const fetchTags = async (questionId) => {
-    console.log(questionId);
-    const response = await fetch(
-      `${API_BASE_URL}/api/tags/${questionId}`
-    );
-    const data = await response.text(); // Change to text to inspect the raw response
-    console.log(data); // This will help you see if the response is HTML or JSON
+  useEffect(() => {
+    if (!question?.id) return;
+    const fetchTags = async () => {
+      console.log(question.id);
+      const response = await fetch(`${API_BASE_URL}/api/tags/${question.id}`);
+      const data = await response.text();
+      console.log(data);
+      const tags = JSON.parse(data);
+      setQuestionTags((prevState) => ({
+        ...prevState,
+        [question.id]: tags,
+      }));
+    };
 
-    const tags = JSON.parse(data); // Convert to JSON if the response is correct
-    setQuestionTags((prevState) => ({
-      ...prevState,
-      [questionId]: tags,
-    }));
-  };
-  useEffect( () => {
-    fetchTags(question.id);
-  }, [])
+    fetchTags().catch((err) => console.error("Error fetching tags:", err));
+  }, [question?.id]);
 
-  const get_userName = async (id) => {
-    if(id !== undefined){
-      
+  useEffect(() => {
+    if (!question?.author_id) return;
+    const getUserName = async () => {
       try {
-        const res = await axios.post("http://localhost:8081/username", { id });
-        setUserName((prevUsernames) => ({
-          ...prevUsernames,
-          [0]: res.data,
-        }));
+        const res = await axios.post("http://localhost:8081/username", {
+          id: question.author_id,
+        });
+        setUserName(res.data);
         console.log(res.data);
-
       } catch (error) {
         console.error("Error fetching username:", error);
-        return "Unknown"
       }
-    }
-  };
- useEffect(() => {
-    get_userName(question.author_id)
+    };
 
-  }, []);
+    getUserName();
+  }, [question?.author_id]);
 
-  const  fetchIsMarked = async () => {
+  const fetchIsMarked = useCallback(async () => {
+    if (!question?.id) return;
     try {
-      const res = await axios.post("http://localhost:8081/ismarked", { question_id :question.id });
+      const res = await axios.post("http://localhost:8081/ismarked", {
+        question_id: question.id,
+      });
       setIsMarked(res.data.result[0].row_exists);
       console.log(res.data.result[0].row_exists);
     } catch (error) {
-      console.error("Error fetching username:", error);
-      return "Unknown"
+      console.error("Error fetching isMarked:", error);
     }
-  } 
-  useEffect(() => {
-    fetchIsMarked()
+  }, [question?.id]);
 
-  }, []);
+  useEffect(() => {
+    fetchIsMarked();
+  }, [fetchIsMarked]);
   
   const [content, setContent] = useState("");
-  const[url, setUrl] = useState("");
+  const url = "";
 
   // const submitImage = (event) => {
   //   event.preventDefault();
@@ -146,7 +108,6 @@ const Question = ({ isOpen, toggle }) => {
         throw new Error(`Failed to create comment: ${response.data.message}`);
       }
 
-      const newComment = response.data.comment; //comment data in response
       window.location.reload(true);
 
       // Update the comment list state (omitted for brevity)
@@ -157,7 +118,8 @@ const Question = ({ isOpen, toggle }) => {
   };
 
   const [rating, setRating] = useState(question.rating !== null ? question.rating : 0);
-  const fetchQuestionRating = async () => {
+  const fetchQuestionRating = useCallback(async () => {
+    if (!question?.id) return;
     try {
       const response = await axios.post(
         "http://localhost:8081/questionrating",
@@ -168,11 +130,11 @@ const Question = ({ isOpen, toggle }) => {
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [question?.id]);
 
   useEffect(() => {
     fetchQuestionRating(); // Call the fetchUserVote function on component mount
-  }, [question]); // Call fetchUserVote whenever the question changes
+  }, [fetchQuestionRating]); // Call fetchUserVote whenever the question changes
 
   //{ var userVote = 0;
   // const userValues = {target_id:question.id}
@@ -196,10 +158,9 @@ const Question = ({ isOpen, toggle }) => {
   //}
 
   const [userVote, setUserVote] = useState(0); // Initialize userVote state
-  const [marked, setMarked] = useState(null);
-
- 
-  const fetchUserVote = async () => {
+  
+  const fetchUserVote = useCallback(async () => {
+    if (!question?.id) return;
     try {
       const response = await axios.post("http://localhost:8081/uservote", {
         target_id: question.id,
@@ -209,12 +170,12 @@ const Question = ({ isOpen, toggle }) => {
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [question?.id]);
 
   useEffect(() => {
     fetchUserVote(); // Call the fetchUserVote function on component mount
     
-  }, [question]); // Call fetchUserVote whenever the question changes
+  }, [fetchUserVote]); // Call fetchUserVote whenever the question changes
 
   useEffect(() => {
     if (userVote === 1) {
@@ -235,17 +196,18 @@ const Question = ({ isOpen, toggle }) => {
   // values.is_comment = false;
 
   useEffect(() => {
-    setValues({
-      ...values,
+    if (!question?.id) return;
+    setValues((prev) => ({
+      ...prev,
       target_id: question.id,
       is_comment: false,
-    });
-  }, [question]);
+    }));
+  }, [question?.id]);
 
   const handelMarked =async () =>{
     console.log("clik")
     try {
-      const response = await axios.post("http://localhost:8081/question_marked", {
+      await axios.post("http://localhost:8081/question_marked", {
         question_id: question.id,
         user_id: question.author_id
       });
@@ -259,7 +221,7 @@ const Question = ({ isOpen, toggle }) => {
   const handelunMarked =async () =>{
     console.log("clik")
     try {
-      const response = await axios.post("http://localhost:8081/question_unmarked", {
+      await axios.post("http://localhost:8081/question_unmarked", {
         question_id: question.id,
         user_id: question.author_id
       });
@@ -346,9 +308,9 @@ console.log(isMarked)
     <div>
       {question && (
         <main className={classNames("main-content", { "-active": !isOpen })}>
-                 <div className="userdate">
-          <div><img src={userImg} className="noteuserimg"/></div>
-          <div className={classNames("usernote", { "-activeusernote": !isOpen })}> {userName[0] || "Loading..."}</div>
+          <div className="userdate">
+          <div><img src={userImg} className="noteuserimg" alt="User avatar" /></div>
+          <div className={classNames("usernote", { "-activeusernote": !isOpen })}> {userName || "Loading..."}</div>
  {safeFormatDistance(question?.created_at)}
 
           </div>

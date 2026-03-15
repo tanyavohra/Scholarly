@@ -7,7 +7,7 @@ const ImageComponent = ({ imageUrl }) => {
   };
 
   return (
-    <img src={imageUrl} alt="Resized Image" style={imageStyle} />
+    <img src={imageUrl} alt="Attachment" style={imageStyle} />
   );
 };
 

@@ -458,9 +458,8 @@
 //   );
 // }
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { faDollyFlatbed } from "@fortawesome/free-solid-svg-icons";
 import { safeFormatDistance } from "../utils/date";
 import userImg from "../user.png";
 import './comments.css'
@@ -480,7 +479,7 @@ export default function CommentList({ questionId }) {
   // useEffect(() => {
   //   get_userName(comment.author_id)
   // }, []);
-  const get_userName = async (id, commId) => {
+  const get_userName = useCallback(async (id, commId) => {
     if(id !== undefined){
 
       try {
@@ -494,10 +493,48 @@ export default function CommentList({ questionId }) {
         console.error("Error fetching username:", error);
       }
     }
-  };
+  }, []);
   // const [theFirstId, setFIrstId] = useState(0);
 
-  var thecommentrating = [];
+  const fetchCommentRating = useCallback(async (commentIds) => {
+    try {
+      const response = await axios.post("http://localhost:8081/commentrating", {
+        target_ids: [commentIds],
+      });
+      console.log(response);
+      const ratings = {};
+      for (let i = 0; i < response.data.length; i++) {
+        const commentId = commentIds[i];
+        ratings[commentId] = response.data[i].rating;
+      }
+
+      console.log(ratings);
+      setcommentRating(ratings);
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
+
+  const fetchUserVotes = useCallback(async (commentIds) => {
+    try {
+      const response = await axios.post("http://localhost:8081/usercommentvote", {
+        target_ids: [commentIds],
+      });
+
+      console.log(response);
+      const votes = {};
+      for (let i = 0; i < response.data.length; i++) {
+        const vote = response.data[i];
+        const commentId = commentIds[i];
+        votes[commentId] = vote.value;
+      }
+
+      console.log(votes);
+      setUserVotes(votes);
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchComments = async () => {
@@ -507,11 +544,14 @@ export default function CommentList({ questionId }) {
         );
         setComments(response.data);
         const commentIds = response.data.map((comment) => comment.id);
-        response.data.map((comment) => get_userName(comment.user_id, comment.id));
+        response.data.forEach((comment) => get_userName(comment.user_id, comment.id));
         // setFIrstId(commentIds[0]);
 
-        thecommentrating = response.data.map((comment) => comment.rating);
-        setcommentRating(thecommentrating);
+        const initialRatings = {};
+        response.data.forEach((comment) => {
+          initialRatings[comment.id] = comment.rating;
+        });
+        setcommentRating(initialRatings);
         fetchUserVotes(commentIds);
         fetchCommentRating(commentIds);
         
@@ -521,7 +561,7 @@ export default function CommentList({ questionId }) {
     };
 
     fetchComments();
-  }, [questionId]);
+  }, [fetchCommentRating, fetchUserVotes, get_userName, questionId]);
 
   useEffect(() => {
     console.log("1", userVotes)
@@ -541,68 +581,6 @@ export default function CommentList({ questionId }) {
 
     }
   }, [userVotes]);
-  useEffect(() => {
-    console.log("1", userVotes)
-    if(userVotes !== null){
-      for(let i=0; i<userVotes.length; i++){
-        console.log("2", userVotes)
-        if(userVotes[i] !== undefined){
-          if (userVotes[i] === 1) {
-            setIsUpvoted(true);
-            setIsDownvoted(false);
-          } else if (userVotes[i] === -1) {
-            setIsUpvoted(false);
-            setIsDownvoted(true);
-          }
-        }
-      }
-
-    }
-  }, []);
-
-  const fetchCommentRating = async (commentIds) => {
-    console.log(commentrating);
-    try {
-      const response = await axios.post("http://localhost:8081/commentrating", {
-        target_ids: [commentIds],
-      });
-      console.log(response);
-      const ratings = {};
-      for (let i = 0; i < response.data.length; i++) {
-        const commentId = commentIds[i]; // Get the comment ID from the commentIds array
-        ratings[commentId] = response.data[i].rating; // Assigning ratings to keys with comment IDs
-      }
-
-      console.log(ratings);
-      setcommentRating(ratings);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const fetchUserVotes = async (commentIds) => {
-    try {
-      const response = await axios.post(
-        "http://localhost:8081/usercommentvote",
-        {
-          target_ids: [commentIds], // Send multiple comment IDs in one request
-        }
-      );
-
-      console.log(response);
-      const votes = {};
-      for (let i = 0; i < response.data.length; i++) {
-        const vote = response.data[i];
-        const commentId = commentIds[i]; // Get the comment ID from the commentIds array
-        votes[commentId] = vote.value; // Assigning values to keys with comment IDs
-      }
-
-      console.log(votes);
-      setUserVotes(votes);
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   console.log(userVotes);
 
@@ -755,7 +733,7 @@ export default function CommentList({ questionId }) {
   useEffect(() => {
     const changedCommentIds = Object.keys(userVotes).filter((commentId) => {
       // Check if the vote value for `commentId` changed compared to the previous state
-      return userVotes[commentId] !== prevUserVotes[commentId];
+      return userVotes[commentId] !== prevUserVotes.current?.[commentId];
     });
 
     changedCommentIds.forEach((commentId) => {
@@ -782,7 +760,7 @@ export default function CommentList({ questionId }) {
       {comments.map((comment) => (
         <li key={comment.id}>
           <div className="commtopcontainer">
-            <div><img src={userImg} className="noteuserimg"/></div>
+            <div><img src={userImg} className="noteuserimg" alt="User avatar" /></div>
                 <div className="usernote"> {userNames[comment.id] || "Loading..."}</div>
                 <div className="created_time">
                  {safeFormatDistance(comment?.created_at)}

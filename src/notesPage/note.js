@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Modal from "react-modal";
 import { Worker } from "@react-pdf-viewer/core";
@@ -31,24 +31,27 @@ const Note = ({ isOpen }) => {
 
   const [isMarked, setIsMarked]  = useState("");
 
-  const  fetchIsMarked = async () => {
+  const fetchIsMarked = useCallback(async () => {
+    if (!note?.id) return;
     try {
-      const res = await axios.post("http://localhost:8081/ismarkednote", { note_id :note.id });
+      const res = await axios.post("http://localhost:8081/ismarkednote", {
+        note_id: note.id,
+      });
       setIsMarked(res.data.result[0].row_exists);
       console.log(res.data.result[0].row_exists);
     } catch (error) {
-      console.error("Error fetching username:", error);
-      return "Unknown"
+      console.error("Error fetching isMarked:", error);
     }
-  } 
-  useEffect(() => {
-    fetchIsMarked()
+  }, [note?.id]);
 
-  }, []);
+  useEffect(() => {
+    fetchIsMarked();
+  }, [fetchIsMarked]);
+
   const handelMarked =async () =>{
     console.log("clik")
     try {
-      const response = await axios.post("http://localhost:8081/note_marked", {
+      await axios.post("http://localhost:8081/note_marked", {
         note_id: note.id,
         user_id: note.author_id
       });
@@ -62,7 +65,7 @@ const Note = ({ isOpen }) => {
   const handelunMarked =async () =>{
     console.log("clik")
     try {
-      const response = await axios.post("http://localhost:8081/note_unmarked", {
+      await axios.post("http://localhost:8081/note_unmarked", {
         note_id: note.id,
         user_id: note.author_id
       });
@@ -76,7 +79,8 @@ const Note = ({ isOpen }) => {
 
 
   const [rating, setRating] = useState(note.rating !== null ? note.rating : 0);
-  const fetchnoteRating = async () => {
+  const fetchnoteRating = useCallback(async () => {
+    if (!note?.id) return;
     try {
       const response = await axios.post(
         "http://localhost:8081/noterating",
@@ -87,14 +91,15 @@ const Note = ({ isOpen }) => {
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [note?.id]);
   useEffect(() => {
     fetchnoteRating(); // Call the fetchUserVote function on component mount
-  }, [note]);
+  }, [fetchnoteRating]);
 
   const [userVote, setUserVote] = useState(0); // Initialize userVote state
 
-  const fetchUserVote = async () => {
+  const fetchUserVote = useCallback(async () => {
+    if (!note?.id) return;
     try {
       const response = await axios.post("http://localhost:8081/noteuservote", {
         target_id: note.id,
@@ -104,11 +109,11 @@ const Note = ({ isOpen }) => {
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [note?.id]);
 
   useEffect(() => {
     fetchUserVote(); // Call the fetchUserVote function on component mount
-  }, [note]); // Call fetchUserVote whenever the note changes
+  }, [fetchUserVote]); // Call fetchUserVote whenever the note changes
 
   useEffect(() => {
     if (userVote === 1) {
@@ -128,11 +133,12 @@ const Note = ({ isOpen }) => {
   // values.is_comment = false;
 
   useEffect(() => {
-    setValues({
-      ...values,
+    if (!note?.id) return;
+    setValues((prev) => ({
+      ...prev,
       target_id: note.id,
-    });
-  }, [note]);
+    }));
+  }, [note?.id]);
 
   const handleDownVote = () => {
     values.vote_type = -1;
@@ -243,17 +249,21 @@ const Note = ({ isOpen }) => {
   });
 
   useEffect(() => {
-    get_userName(note.author_id)
-  }, []);
-  const get_userName = async (id) => {
-    try {
-      const res = await axios.post("http://localhost:8081/username", { id });
-      setUsernames(res.data);
-      console.log(res.data);
-    } catch (error) {
-      console.error("Error fetching username:", error);
-    }
-  };
+    if (!note?.author_id) return;
+    const getUserName = async () => {
+      try {
+        const res = await axios.post("http://localhost:8081/username", {
+          id: note.author_id,
+        });
+        setUsernames(res.data);
+        console.log(res.data);
+      } catch (error) {
+        console.error("Error fetching username:", error);
+      }
+    };
+
+    getUserName();
+  }, [note?.author_id]);
 
   return (
     <div>
@@ -263,8 +273,8 @@ const Note = ({ isOpen }) => {
         >
           <div className="titles">
           <hr />
-            <div className="userFlex">
-              <div><img src={user} className="noteuserimg"/></div>
+             <div className="userFlex">
+              <div><img src={user} className="noteuserimg" alt="User avatar" /></div>
               <div className="theusernote">{username}</div>
               <div className="created_time">
                {safeFormatDistance(note?.created_at)}
