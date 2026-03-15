@@ -16,6 +16,31 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
+// HashRouter helper: treat root-relative <a href="/..."> links as in-app navigation.
+// Without this, clicking such links on a HashRouter app loads "/..." (no hash),
+// which makes the router fall back to "/" (Login) after reload.
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "click",
+    (event) => {
+      const anchor = event.target?.closest?.("a");
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+      if (href.startsWith("#")) return;
+      if (href.startsWith("http://") || href.startsWith("https://")) return;
+      if (href.startsWith("mailto:") || href.startsWith("tel:")) return;
+      if (!href.startsWith("/")) return;
+      if (anchor.target && anchor.target !== "_self") return;
+
+      event.preventDefault();
+      window.location.hash = href;
+    },
+    true
+  );
+}
+
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
