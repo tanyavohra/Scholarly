@@ -344,7 +344,7 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
             </NavItem>
              
             <NavItem>
-              <NavLink tag={Link} to="/ask">
+              <NavLink tag={Link} to="#/ask">
                 <button
                   className={classNames("ask-button", {
                     "-askactive": !isOpen,
