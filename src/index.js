@@ -14,34 +14,9 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-
-if (typeof document !== "undefined") {
-  document.addEventListener(
-    "click",
-    (event) => {
-      const anchor = event.target?.closest?.("a");
-      if (!anchor) return;
-
-      const href = anchor.getAttribute("href");
-      if (!href) return;
-      if (href.startsWith("#")) return;
-      if (href.startsWith("http://") || href.startsWith("https://")) return;
-      if (href.startsWith("mailto:") || href.startsWith("tel:")) return;
-      if (!href.startsWith("/")) return;
-      if (anchor.target && anchor.target !== "_self") return;
-
-      event.preventDefault();
-      window.location.hash = href;
-    },
-    true
-  );
-}
-
-
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
 );
-
