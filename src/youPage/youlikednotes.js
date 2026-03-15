@@ -1,13 +1,9 @@
 import React, { useEffect, useState } from "react";
-import classNames from "classnames";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import "./youComponents/youPage.css";
-import { Container } from "reactstrap";
 import userImg from '../user.png';
-import { isElementOfType } from "react-dom/test-utils";
-import "./youComponents/youPage.css";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { safeFormatDistance } from "../utils/date";
 
@@ -128,7 +124,7 @@ const LikedNotes = ({isOpen}) => {
                 <div className="noteuserContainer">
                   <div className="noteuser">
                     <div className="noteuserImgContainer">
-                      <img src={userImg} className="nuser-image" />
+                      <img src={userImg} className="nuser-image" alt="User avatar" />
                     </div>
                   </div>
                   <div className="noteInfo">

@@ -17,7 +17,6 @@ import { Worker, Viewer } from "@react-pdf-viewer/core";
 // import { PDFDocument } from "pdf-lib";
 // console.log("pdfjs:", pdfjs);
 
-{
   // const Notes = ({ isOpen }) => {
   //   const [notes, setNotes] = useState([]);
   //   const [usernames, setUsernames] = useState({});
@@ -131,9 +130,8 @@ import { Worker, Viewer } from "@react-pdf-viewer/core";
   //   );
   // };
   // export default Notes;
-}
 
-{
+
   /* <li className="note" key={ note.id}>
          
           <div className="note-card">
@@ -160,7 +158,6 @@ import { Worker, Viewer } from "@react-pdf-viewer/core";
       
         </li>
  */
-}
 
 // const Notes = ({ isOpen }) => {
 //   const [notes, setNotes] = useState([]);
@@ -302,8 +299,6 @@ import { Worker, Viewer } from "@react-pdf-viewer/core";
 const Notes = ({ isOpen }) => {
   const [notes, setNotes] = useState([]);
   const [usernames, setUsernames] = useState({});
-  const [thumb, setThumb] = useState(null);
-  const pdfUrl = "https://pdfobject.com/pdf/sample.pdf";
   
 
   const decodePdfUrl = (pdf_url) => {
@@ -336,8 +331,6 @@ const Notes = ({ isOpen }) => {
       })
       .catch((error) => console.error("Error fetching notes:", error));
   }, []);
-
-  const navigate = useNavigate();
 
   const get_userName = async (id) => {
     try {
@@ -415,7 +408,7 @@ const Notes = ({ isOpen }) => {
                 <div className="noteuserContainer">
                   <div className="noteuser">
                     <div className="noteuserImgContainer">
-                      <img src={user} className="nuser-image" />
+                      <img src={user} className="nuser-image" alt="User avatar" />
                     </div>
                   </div>
                   <div className="noteInfo">

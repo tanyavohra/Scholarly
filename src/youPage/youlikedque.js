@@ -1,13 +1,9 @@
 import React, { useEffect, useState } from "react";
-import classNames from "classnames";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import "./youComponents/youPage.css";
-import { Container } from "reactstrap";
 import userImg from '../user.png';
-import { isElementOfType } from "react-dom/test-utils";
-import "./youComponents/youPage.css";
 import { safeFormatDistance } from "../utils/date";
 import { API_BASE_URL } from "../config";
 
@@ -154,7 +150,7 @@ const LikedQue = ({isOpen}) => {
                       </div>
                     <div className="user">
                       <div>
-                        <img src={userImg} className="user-image" />
+                        <img src={userImg} className="user-image" alt="User avatar" />
                       </div>
                       <div className="name">{usernames[question.author_id] || "Loading..."}</div>
                     </div>

@@ -4,7 +4,6 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import "./youComponents/youPage.css";
-import { Container } from "reactstrap";
 import userImg from '../user.png';
 import { Worker, Viewer } from "@react-pdf-viewer/core";
 import { safeFormatDistance } from "../utils/date";
@@ -217,7 +216,7 @@ useEffect(() => {
                 <div className="noteuserContainer">
                   <div className="noteuser">
                     <div className="noteuserImgContainer">
-                      <img src={userImg} className="nuser-image" />
+                      <img src={userImg} className="nuser-image" alt="User avatar" />
                     </div>
                   </div>
                   <div className="noteInfo">
@@ -301,7 +300,7 @@ useEffect(() => {
                       </div>
                     <div className="user">
                       <div>
-                        <img src={userImg} className="user-image" />
+                        <img src={userImg} className="user-image" alt="User avatar" />
                       </div>
                       <div className="name">{user[0].name}</div>
                     </div>
@@ -384,7 +383,7 @@ useEffect(() => {
                     </div>
                     <div className="user">
                       <div>
-                        <img src={userImg} className="user-image" />
+                        <img src={userImg} className="user-image" alt="User avatar" />
                       </div>
                       <div className="name">@soham_the_legend</div>
                     </div>
@@ -428,7 +427,7 @@ useEffect(() => {
         <hr/>
           <div class="leftbox-you">
             <nav className="nav-you">
-            <img src={userImg} className="youuser-image" />
+            <img src={userImg} className="youuser-image" alt="User avatar" />
             </nav>
           </div>
 

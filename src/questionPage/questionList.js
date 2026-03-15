@@ -3,18 +3,16 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import classNames from "classnames";
 import "../components/page.css";
 import axios from "axios";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "./questionsPage.css";
 import user from "../user.png";
 import { safeFormatDistance } from "../utils/date";
-import { connectStorageEmulator } from "firebase/storage";
 import { API_BASE_URL } from "../config";
 
 const QuestionList = ({ isOpen, toggle }) => {
   const [questions, setQuestions] = useState([]);
   const [questionTags, setQuestionTags] = useState({});
   const [answer_count, setAnswer_count] = useState({});
-  const [title, setTitle] = useState([]);
   const [usernames, setUsernames] = useState({});
   const get_userName = async (id) => {
     try {
@@ -72,13 +70,6 @@ const QuestionList = ({ isOpen, toggle }) => {
     console.log("N");
   }, []);
 
-  const titleTrunacate = ({ title, maxlength = 124 }) => {
-    if (typeof title === "string" && title.length > maxlength) {
-      return title.substring(0, maxlength - 3) + "...";
-    }
-    return title;
-  };
-
   // useEffect(() => {
 
   //   axios.get("http://localhost:8081/allquestions").then((res) => {
@@ -93,7 +84,6 @@ const QuestionList = ({ isOpen, toggle }) => {
   //   });
   // }, []);
 
-  const navigate = useNavigate();
   // const handelQueClick= (question) => {
   //   navigate(`/question/${question.id}`);
   // };
@@ -156,7 +146,7 @@ const QuestionList = ({ isOpen, toggle }) => {
 
                       <div className="user">
                         <div>
-                          <img src={user} className="user-image" />
+                          <img src={user} className="user-image" alt="User avatar" />
                         </div>
                         <div className="name">
                           {usernames[question.author_id] || "Loading..."}
