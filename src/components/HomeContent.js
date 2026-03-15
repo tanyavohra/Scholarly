@@ -1,15 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from 'axios';
 import "bootstrap/dist/css/bootstrap.min.css";
-import SideBar from "./sidebar/Side";
-import Content from "./content/Content";
-import { BrowserRouter as Router, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "./page.css"; 
 import "./Home.css"; 
-import { useNavigate} from "react-router-dom";
-import user from "../user.png";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
-import classNames from "classnames";
 import userImg from "../user.png";
 import { safeFormatDistance } from "../utils/date";
 import { API_BASE_URL } from "../config";
@@ -138,7 +133,6 @@ function HomeContent({isOpen}){
   }
 
   
-  const navigate = useNavigate();
   const User = "User"
   const currUserName = (user) => {
     if(user[0] !== undefined){
@@ -209,7 +203,7 @@ function HomeContent({isOpen}){
                       </div>
                     <div className="user">
                       <div>
-                        <img src={userImg} className="user-image" />
+                        <img src={userImg} className="user-image" alt="User avatar" />
                       </div>
                       <div className="name">{usernamesq[question.author_id] || "Loading..."}</div>
                     </div>
@@ -266,7 +260,7 @@ function HomeContent({isOpen}){
                 <div className="noteuserContainer">
                   <div className="noteuser">
                     <div className="noteuserImgContainer">
-                      <img src={userImg} className="nuser-image" />
+                      <img src={userImg} className="nuser-image" alt="User avatar" />
                     </div>
                   </div>
                   <div className="noteInfo">

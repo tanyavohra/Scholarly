@@ -2,13 +2,9 @@ import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faHome,
-  faBriefcase,
   faPaperPlane,
   faQuestion,
-  faImage,
-  faStickyNote,
   faFileAlt,
-  faCopy,
   faBookmark,
   
 } from "@fortawesome/free-solid-svg-icons";

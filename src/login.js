@@ -1,16 +1,10 @@
-import { useState } from "react";
-import React from "react";
+import React, { useState } from "react";
 
 import "bootstrap/dist/css/bootstrap.min.css";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import LogValidation from "./LogValidation";
 import Validation from "./signupValidation";
-import { faSmokingBan } from "@fortawesome/free-solid-svg-icons";
-import Scholarly from "./brainlink.png";
-import Scholarly2 from "./brainlink.png";
-import Scholarly3 from "./brainlink3.png";
 import link1 from "./link.png";
 
 function Login() {
@@ -79,7 +73,7 @@ function Login() {
     confpass: "",
   });
 
-  const [signerrors, setsignErrors] = useState({});
+  const [, setsignErrors] = useState({});
   const handleSignInput = (event) => {
     setSignValues((prev) => ({
       ...prev,
@@ -131,10 +125,6 @@ function Login() {
   const [isChecked, setIsChecked] = useState(false)
   const handleCheckboxChange = (event) => {
     setIsChecked(event.target.checked);
-  };
-
-  const getLabelText = () => {
-    return isChecked ? 'back to Login' : 'Sign up';
   };
 
   return (

@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from "react";
 import classNames from "classnames";
-import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import "./notes.css";
 import user from "../user.png";
 import { safeFormatDistance } from "../utils/date";
 import { Worker, Viewer } from "@react-pdf-viewer/core";
-import pdfjs from "pdfjs-dist";
-import { connectStorageEmulator } from "firebase/storage";
 // import "@react-pdf-viewer/core/lib/styles/index.css";
 // import {
 //   Worker,

@@ -12,7 +12,6 @@ import Ask from "./askPage/ask";
 import QuestionList from "./questionPage/questionList";
 import Question from "./questionPage/question";
 import SideBar from "./components/sidebar/Side";
-import Content from "./components/content/Content";
 import Topbar from "./components/content/top.js";
 import Notes from "./notesPage/notes.js";
 import AddNote from "./addNotePage/addNote.js";
@@ -168,11 +167,6 @@ export default App;
 // }
 
 // export default App;
-
-{
-  /* 
-    <BurningQuestions/> */
-}
 
 // import 'bootstrap/dist/css/bootstrap.min.css'
 // import './App.css'

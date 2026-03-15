@@ -1,7 +1,7 @@
 import { React, useState } from "react";
 import classNames from "classnames";
 import { Container } from "reactstrap";
-import { Switch, Route, Routes, useNavigate } from "react-router-dom";
+import { Route, Routes, useNavigate } from "react-router-dom";
 import "../../../components/page.css";
 import Topbar from "./top.js";
 import axios from "axios";

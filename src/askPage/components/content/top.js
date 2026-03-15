@@ -1,6 +1,3 @@
-
-import { faImage } from "@fortawesome/free-solid-svg-icons";
-
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAlignLeft } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -12,7 +9,7 @@ import {
   NavItem,
   NavLink,
 } from "reactstrap";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "../../../components/page.css";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -23,8 +20,8 @@ const Topbar = ({ toggleSidebar }) => {
   const toggleTopbar = () => setTopbarOpen(!topbarIsOpen);
 
   const [auth, setAuth] = useState(false);
-  const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
+  const [, setName] = useState("");
+  const [, setMessage] = useState("");
 
   //.....
   axios.defaults.withCredentials = true;
@@ -43,9 +40,6 @@ const Topbar = ({ toggleSidebar }) => {
       }
     });
   }, []);
-
-  const navigate = useNavigate();
-
 
   return (
     <Navbar

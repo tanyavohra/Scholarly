@@ -1,9 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./search.css";
-import { useLocation } from "react-router-dom";
-import { Link } from "react-router-dom";
 
 
 const Alltags = () =>{
@@ -44,7 +42,6 @@ const Alltags = () =>{
           .catch(error => console.error("Error fetching quetags:", error));
       }, [question_tags]);
 
-      const questionsMap = new Map(questions.map(q => [q.id, q]));
       const question_tagsMap = new Map(question_tags.map(q => [q.tag_id, q]));
     
     

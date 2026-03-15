@@ -1,20 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 // import "bootstrap/dist/css/bootstrap.min.css";
 //import SideBar from "./youComponents/sidebar/Side";
-import Content from "./components/content/Content";
 import "./components/askPage.css";
 import {
   ref,
   uploadBytes,
   getDownloadURL,
-  deleteObject,
-  listAll,
-  list,
 } from "firebase/storage";
 import { storage } from "../Firebase";
 import { v4 } from "uuid";
 
-import { Switch, Route, Routes, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "../components/page.css";
 import axios from "axios";
 
@@ -31,7 +27,6 @@ function Ask() {
 
   const handleKeyDown = (e) => {
     const code = e.keyCode || e.which;
-    const newTag = tag.trim();
     if((code !== 13 && code !== 188) || tag.length===0){
       return ;
     }
@@ -47,31 +42,11 @@ function Ask() {
     }, 0);
     
   }
-  const handleAddTag = (newTag) => {
-    if (newTag.trim() === "") return; // Avoid adding empty tags
-    setValues(prev => ({
-      ...prev,
-      tags: [...prev.tags, newTag]  // Add the new tag to the tags array
-    }));
-    setTag("");  // Clear the tag input
-  };
-
-
   const deleteTag = (index) => {
     const dupTags = [...tags];
     dupTags.splice(index, 1); // 1 thing remmoved at index
     setTags(dupTags);
   }
-  const handleRemoveTag = (index) => {
-    // Create a new array without the tag at the specified index
-    const newTags = values.tags.filter((_, i) => i !== index);
-    
-    // Update the `tags` field in the `values` object
-    setValues(prev => ({
-      ...prev,
-      tags: newTags
-    }));
-  };
 
   const navigate = useNavigate();
 
@@ -86,7 +61,6 @@ function Ask() {
 
   const [imageUpload, setImageUpload] = useState(null);
   // const [imageUrls, setImageUrls] = useState([]);
-  const imagesListRef = ref(storage, "queimages/");
   var imageRef="";
   const submitImage = (event) => {
     event.preventDefault();

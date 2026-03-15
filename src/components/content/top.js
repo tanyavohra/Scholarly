@@ -155,8 +155,6 @@
 
 //export default Topbar;
 
-import { faImage } from "@fortawesome/free-solid-svg-icons";
-import lunr from "lunr";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAlignLeft } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
@@ -171,7 +169,7 @@ import {
 } from "reactstrap";
 import { Link, useNavigate } from "react-router-dom";
 import "../page.css";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 
@@ -182,8 +180,8 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
   const toggleTopbar = () => setTopbarOpen(!topbarIsOpen);
 
   const [auth, setAuth] = useState(false);
-  const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
+  const [, setName] = useState("");
+  const [, setMessage] = useState("");
 
   //.....
   axios.defaults.withCredentials = true;
@@ -207,8 +205,7 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
   // const [questionsData, setQuestionsData] = useState([]);
 
   
-  const [searchResults, setSearchResults] = useState([]);
-  const indexRef = useRef(null);
+  const [searchResults] = useState([]);
 
   
 
@@ -344,7 +341,7 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
             </NavItem>
              
             <NavItem>
-              <NavLink tag={Link} to="#/ask">
+              <NavLink tag={Link} to="/ask">
                 <button
                   className={classNames("ask-button", {
                     "-askactive": !isOpen,
