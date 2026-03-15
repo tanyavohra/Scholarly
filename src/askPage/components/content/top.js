@@ -73,21 +73,19 @@ const Topbar = ({ toggleSidebar }) => {
               </div>
             </NavItem>
             <NavItem>
-              <button className="ask-button"><a href="/ask">
-              Ask 
-                      </a></button>
+              <NavLink tag={Link} to="/ask">
+                <button className="ask-button">Ask</button>
+              </NavLink>
             </NavItem>
             <>
               {auth ? (
             <NavLink tag={Link} to={"/you"}>
               <button className="login-button">You</button>
             </NavLink>        
-              ):(
+              ) : (
                 <NavLink tag={Link} to={"/"}>
-              <button className="login-button"><a href="/" className="btn btn-primary">
-                        Login djkfk!
-                      </a></button>
-            </NavLink>   
+                  <button className="login-button">Login</button>
+                </NavLink>
               )}
             </>
           </div>

@@ -41,6 +41,7 @@ function App() {
           <Route path="/search" element={<Search />} />
           <Route path="/search/:id" element={<SearchTag />} />
           <Route path="/alltags" element={<Alltags />} />
+          <Route path="/pdfchat" element={<PdfChat />} />
           <Route path="/pdfchat/:id" element={<PdfChat />} />
           <Route
             path="/*"

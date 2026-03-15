@@ -281,11 +281,9 @@ const Search = () => {
       <h2 >
         Can't find the Question?
       </h2>
-      <a href="/ask">
-      <button className="ask-buttonsearch">
-                  Post Your Question 
-                </button>
-      </a>
+      <Link to="/ask">
+        <button className="ask-buttonsearch">Post Your Question</button>
+      </Link>
     </div>
   </div>
 )

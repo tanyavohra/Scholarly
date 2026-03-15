@@ -5,8 +5,6 @@ import App from './App';
 import axios from "axios";
 import { API_BASE_URL } from "./config";
 
-// Deployment-friendly: keep existing hard-coded dev URLs working, but allow override via env.
-// This avoids editing dozens of call sites while still enabling real deployments.
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use((config) => {
   const url = config?.url;
@@ -16,9 +14,7 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-// HashRouter helper: treat root-relative <a href="/..."> links as in-app navigation.
-// Without this, clicking such links on a HashRouter app loads "/..." (no hash),
-// which makes the router fall back to "/" (Login) after reload.
+
 if (typeof document !== "undefined") {
   document.addEventListener(
     "click",

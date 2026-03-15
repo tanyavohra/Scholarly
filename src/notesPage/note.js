@@ -315,7 +315,7 @@ const Note = ({ isOpen }) => {
             </div>
           </div>
           <hr />
-          <Link to={`/pdfChat/${note.id}`} state={{ note }}>
+          <Link to={`/pdfchat/${note.id}`} state={{ note }}>
           <div className="divViewPdf">
             <button className="view-pdf" onClick={openModal}>
             <svg width="24" height="24" viewBox="0 0 24 27" fill="none" xmlns="http://www.w3.org/2000/svg"> = $0

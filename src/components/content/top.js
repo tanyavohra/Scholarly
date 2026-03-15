@@ -342,17 +342,17 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
               </div>
               
             </NavItem>
-            
+             
             <NavItem>
-              <a href="/ask">
+              <NavLink tag={Link} to="/ask">
                 <button
                   className={classNames("ask-button", {
                     "-askactive": !isOpen,
                   })}
                 >
-                  Ask Question 
+                  Ask Question
                 </button>
-              </a>
+              </NavLink>
             </NavItem>
             <div className="you-button">
               {auth ? (
@@ -367,9 +367,7 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
                 </NavLink>
               ) : (
                 <NavLink tag={Link} to={"/"}>
-                  <a href="/">
-                    <button className="login-buttonb">Login!</button>
-                  </a>
+                  <button className="login-buttonb">Login!</button>
                 </NavLink>
               )}
             </div>

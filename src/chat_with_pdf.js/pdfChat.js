@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "./pdfchat.css";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Modal from "react-modal";
 import { Worker } from "@react-pdf-viewer/core";
 import { Viewer } from "@react-pdf-viewer/core";
@@ -26,6 +26,18 @@ function PdfChat() {
       disableOpenWithButton: true, // Disable the more actions button
     },
   });
+
+  if (!note) {
+    return (
+      <div style={{ padding: "1rem" }}>
+        <h2>Chat with Notes</h2>
+        <p>Select a note first, then open Chat with Notes from that note.</p>
+        <p>
+          <Link to="/notes">Go to Notes</Link>
+        </p>
+      </div>
+    );
+  }
 
   const pdf_url = note?.pdf;
   let pdfUrlString = "";

@@ -373,9 +373,9 @@ const Notes = ({ isOpen }) => {
           >
             Upload the new notes...
           </h1>
-          <button id="addButton">
-            <a href="/addnote">Upload</a>
-          </button>
+          <Link id="addButton" to="/addnote">
+            Upload
+          </Link>
         </div>
       </div>
 

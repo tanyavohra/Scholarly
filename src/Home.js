@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import "bootstrap/dist/css/bootstrap.min.css";
+import { Link } from "react-router-dom";
 //import './components/NavbarStyle.css';
 import HomeContent from "./components/HomeContent";
 import "./components/page.css";
@@ -104,13 +105,13 @@ function Home() {
                     </form>
                     <li className="nav-item">
                       <button className="btn btn-outline-success">
-                        Ask Your Qudfkfdkjkestion!
+                        Ask Your Question!
                       </button>
                     </li>
                     <li className="nav-item">
-                      <a href="/" className="btn btn-primary">
+                      <Link to="/" className="btn btn-primary">
                         Login!
-                      </a>
+                      </Link>
                     </li>
                   </ul>
                 </div>
