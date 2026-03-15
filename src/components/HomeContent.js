@@ -288,7 +288,7 @@ function HomeContent({isOpen}){
           <div className="searchBox">
             <h4 className="boxh4s">Search Everything</h4>
             <p className="boxhps">Find exactly what you need! <br/>Use our search tool to explore questions, notes, answers, and tags all in one place.</p>
-            <div className="forbutton"><Link to="/search" reloadDocument><button className="boxbuttons">Search</button></Link></div>
+            <div className="forbutton"><Link to="/search" replace><button className="boxbuttons">Search</button></Link></div>
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Ask a Question</h4>
