@@ -6,13 +6,12 @@ function Contact() {
     <div style={{ padding: "1rem" }}>
       <h2>Contact</h2>
       <p>
-        If you have feedback, bug reports, or feature requests, reach out to the
-        team.
+        If you have feedback, bug reports, or feature requests, reach out .
       </p>
       <ul>
         <li>
           Email:{" "}
-          <a href="mailto:support@scholarly.local">support@scholarly.local</a>
+          <a href="mailto:vohratanya5@gmail.com">vohratanya5@gmail.com</a>
         </li>
       </ul>
       <p>
