@@ -18,7 +18,7 @@
 ## Deployment Notes (Important)
 
 This repo is a full-stack app:
-- React frontend (`src/`, `public/`)
-- Node/Express API (`backEnd/server.js`)
-- Python/Flask service (`backEnd/app.py`)
+- React frontend 
+- Node/Express API 
+- Python/Flask service 
 - MongoDB database
