@@ -288,51 +288,51 @@ function HomeContent({isOpen}){
           <div className="searchBox">
             <h4 className="boxh4s">Search Everything</h4>
             <p className="boxhps">Find exactly what you need! <br/>Use our search tool to explore questions, notes, answers, and tags all in one place.</p>
-            <div className="forbutton"><Link to="/search" replace><button className="boxbuttons">Search</button></Link></div>
+            <div className="forbutton"><Link to="/search"><button className="boxbuttons">Search</button></Link></div>
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Ask a Question</h4>
             <p className="boxhps">Got a burning question? <br/>Post it here and let the Scholarly community help you find the answer!
             </p>
-            <div className="forbutton"><Link to="/ask" replace><button className="boxbuttons">Ask a Question</button></Link></div>
+            <div className="forbutton"><Link to="/ask"><button className="boxbuttons">Ask a Question</button></Link></div>
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Answer Questions</h4>
             <p className="boxhps">Share your knowledge! <br/>Browse through questions and provide your answers to help others.
             </p>
-            <div className="forbutton"><Link to="/questions" replace><button className="boxbuttons">Browse Questions</button></Link></div>
+            <div className="forbutton"><Link to="/questions"><button className="boxbuttons">Browse Questions</button></Link></div>
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Explore Notes</h4>
             <p className="boxhps">Discover notes shared by the community. Dive into various topics and learn from others.
             </p>
-            <div className="forbutton"><Link to="/notes" replace><button className="boxbuttons">Dive in Notes</button></Link></div>
+            <div className="forbutton"><Link to="/notes"><button className="boxbuttons">Dive in Notes</button></Link></div>
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Share Notes</h4>
             <p className="boxhps">Have insights to share? <br/>Create notes and contribute your knowledge to the Scholarly community.
             </p>
-            <div className="forbutton"><Link to="/addnote" replace><button className="boxbuttons">Uplode Notes</button></Link></div>
+            <div className="forbutton"><Link to="/addnote"><button className="boxbuttons">Uplode Notes</button></Link></div>
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Tag Your Content</h4>
             <p className="boxhps">Share your knowledge! <br/>Make your questions and notes easier to find by adding relevant tags.
             </p>
-            <div className="forbutton"><Link to="/alltags" replace><button className="boxbuttons">Explore Tags</button></Link></div>
+            <div className="forbutton"><Link to="/alltags"><button className="boxbuttons">Explore Tags</button></Link></div>
 
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Chat with Your Notes</h4>
             <p className="boxhps">Interact with your notes directly in Scholarly. Ask questions, get insights, and engage deeply with your study material. 
             </p>
-            <div className="forbutton"><Link to="/pdfchat" replace><button className="boxbuttons">Explore Now</button></Link></div>
+            <div className="forbutton"><Link to="/pdfchat"><button className="boxbuttons">Explore Now</button></Link></div>
 
           </div>
           <div className="searchBox">
             <h4 className="boxh4s">Profile </h4>
             <p className="boxhps">View your contributions, and manage your profile
             </p>
-            <div className="forbutton"><Link to="/you" replace><button className="boxbuttons">Profile</button></Link></div>
+            <div className="forbutton"><Link to="/you"><button className="boxbuttons">Profile</button></Link></div>
           </div>
         </div>
       </div>
@@ -342,13 +342,13 @@ function HomeContent({isOpen}){
         <div className="anotherhomebox">
         <h3 className="newsh3">Chat with notes!</h3>
         <p className="boxhps">We are excited to introduce the 'Chat with Notes' feature on Scholarly! Now, you can interact directly with the notes in the Scholarly note section, enhancing your productivity and learning experience. Start chatting with the notes today and make the most of your Scholarly experience!</p>
-        <div className="forbutton"><Link to="/pdfchat" replace><button className="boxbuttons">Explore Now!</button></Link></div>
+        <div className="forbutton"><Link to="/pdfchat"><button className="boxbuttons">Explore Now!</button></Link></div>
         
         </div>
         <div className="anotherhomebox">
         <h3 className="newsh3">Tags!</h3>
         <p className="boxhps">We're excited to introduce tags on Scholarly! Now you can easily add tags to your questions, making them more discoverable. <br/>Not only that, but you can also search by tags to find related questions and notes quickly. Start tagging and enhance your Scholarly experience today!</p>
-        <div className="forbutton"><Link to="/alltags" replace><button className="boxbuttons">Explore Tags!</button></Link></div>
+        <div className="forbutton"><Link to="/alltags"><button className="boxbuttons">Explore Tags!</button></Link></div>
         
         </div>
       </div>

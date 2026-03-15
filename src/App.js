@@ -32,7 +32,7 @@ function App() {
 
   return (
     <div>
-      <HashRouter>
+      <HashRouter basename="/">
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/test" element={<Test />} />
