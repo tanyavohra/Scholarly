@@ -16,6 +16,7 @@
     { "source": "/ismarkednote", "destination": "https://scholarly-1-4a00.onrender.com/ismarkednote" },
     { "source": "/login", "destination": "https://scholarly-1-4a00.onrender.com/login" },
     { "source": "/logout", "destination": "https://scholarly-1-4a00.onrender.com/logout" },
+    { "source": "/auth", "destination": "https://scholarly-1-4a00.onrender.com/auth" },
     { "source": "/note_marked", "destination": "https://scholarly-1-4a00.onrender.com/note_marked" },
     { "source": "/note_unmarked", "destination": "https://scholarly-1-4a00.onrender.com/note_unmarked" },
     { "source": "/noterating", "destination": "https://scholarly-1-4a00.onrender.com/noterating" },

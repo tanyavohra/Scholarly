@@ -133,7 +133,9 @@ function cookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
-    sameSite: "lax",
+    // In production, the frontend may be hosted on a different origin (e.g. Vercel) than the API (e.g. Render).
+    // SameSite=None is required for cross-site XHR with credentials.
+    sameSite: isProd ? "none" : "lax",
     secure: isProd,
   };
 }
@@ -251,6 +253,15 @@ const verifyUser = (req, res, next) => {
   }
 };
 app.get("/", verifyUser, async (req, res) => {
+  try {
+    return res.json({ Status: "Success", name: req.name });
+  } catch (err) {
+    return res.json({ Message: "Server Error" });
+  }
+});
+
+// Deployment-friendly auth check endpoint (avoids conflicting with SPA "/" route on the frontend host).
+app.get("/auth", verifyUser, async (req, res) => {
   try {
     return res.json({ Status: "Success", name: req.name });
   } catch (err) {

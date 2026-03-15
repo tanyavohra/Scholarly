@@ -190,7 +190,7 @@ const Topbar = ({ isOpen, toggle, toggleSidebar }) => {
   //.......
 
   useEffect(() => {
-    axios.get("http://localhost:8081").then((res) => {
+    axios.get("http://localhost:8081/auth").then((res) => {
       // console.log(res.data.Status)
       if (res.data.Status === "Success") {
         setAuth(true);

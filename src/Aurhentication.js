@@ -12,7 +12,7 @@ function Authentic(){
     //.......
     
     useEffect(() =>{
-        axios.get("http://localhost:8081")
+        axios.get("http://localhost:8081/auth")
         .then(res=>{
             // console.log(res.data.Status)
             if(res.data.Status === "Success"){
