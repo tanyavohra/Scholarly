@@ -1,0 +1,19 @@
+function applyJsonTransform(schema) {
+  schema.set("toJSON", {
+    transform: (doc, ret) => {
+      delete ret._id;
+      delete ret.__v;
+      return ret;
+    },
+  });
+  schema.set("toObject", {
+    transform: (doc, ret) => {
+      delete ret._id;
+      delete ret.__v;
+      return ret;
+    },
+  });
+}
+
+module.exports = applyJsonTransform;
+

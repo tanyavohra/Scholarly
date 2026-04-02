@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+dist/
+backEnd/node_modules/
+build/
+
+# Environment files
+backEnd/.env
+.env
+
+# Build files
+*.log
+*.pyc
+*.pkl
+*.faiss
+backEnd/__pycache__/
+backEnd/faiss_index/
+frontend_refined/.vite/
+
+# Optional: OS files
+.DS_Store
+desktop.ini
+structure.txt

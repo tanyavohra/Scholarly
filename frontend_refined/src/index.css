@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 25% 97%;
+    --foreground: 226 90% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 226 90% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 226 90% 18%;
+
+    --primary: 248 73% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 257 40% 94%;
+    --secondary-foreground: 257 50% 45%;
+
+    --muted: 230 20% 93%;
+    --muted-foreground: 230 14% 50%;
+
+    --accent: 132 74% 91%;
+    --accent-foreground: 132 60% 28%;
+
+    --destructive: 4 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 230 18% 89%;
+    --input: 230 18% 89%;
+    --ring: 248 73% 59%;
+
+    --radius: 0.875rem;
+
+    --klein-blue: 226 94% 32%;
+    --majorelle: 248 73% 59%;
+    --frosted-mint: 132 74% 91%;
+    --amethyst: 270 36% 69%;
+    --periwinkle: 257 50% 65%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 230 14% 42%;
+    --sidebar-primary: 248 73% 59%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 257 35% 95%;
+    --sidebar-accent-foreground: 257 45% 42%;
+    --sidebar-border: 230 18% 91%;
+    --sidebar-ring: 248 73% 59%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', system-ui, sans-serif;
+    font-weight: 700;
+  }
+}
+
+@layer utilities {
+  .card-elevated {
+    @apply bg-card rounded-2xl border border-border/60;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-elevated:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.04);
+    transform: translateY(-2px);
+  }
+
+  .input-styled {
+    @apply w-full px-4 py-3 rounded-xl border border-border bg-card text-foreground text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all duration-200;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all duration-200;
+    box-shadow: 0 2px 8px hsl(248 73% 59% / 0.3);
+    font-family: 'Poppins', sans-serif;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 4px 16px hsl(248 73% 59% / 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    @apply px-5 py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium text-sm transition-all duration-200;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  .btn-ghost:hover {
+    @apply bg-primary/10 text-primary;
+  }
+
+  .tag-chip {
+    @apply px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-medium;
+  }
+
+  .avatar-ring {
+    @apply w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ring-2 ring-card;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(248 73% 59%), hsl(257 50% 65%));
+  }
+
+  .gradient-brand {
+    background: linear-gradient(135deg, hsl(226 94% 32%), hsl(248 73% 59%));
+  }
+
+  .gradient-soft {
+    background: linear-gradient(135deg, hsl(248 73% 59%), hsl(257 50% 65%), hsl(270 36% 69%));
+  }
+
+  .glass-panel {
+    @apply bg-card/80 backdrop-blur-md border border-border/40;
+  }
+}
