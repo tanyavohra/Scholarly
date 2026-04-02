@@ -120,8 +120,19 @@ def get_vector_store(chunks, store_dir="faiss_index"):
                 max_chunks_limit = limit
         except ValueError:
             pass
+    else:
+        # Render free/low-tier instances can OOM on very large PDFs.
+        # Put a conservative cap unless the operator explicitly configures MAX_CHUNKS.
+        if os.getenv("RENDER"):
+            max_chunks_limit = 1500
 
-    batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
+    default_batch = "32" if os.getenv("RENDER") else "64"
+    try:
+        batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", default_batch))
+    except ValueError:
+        batch_size = int(default_batch)
+    if batch_size <= 0:
+        batch_size = int(default_batch)
     vector_store = None
 
     batch = []

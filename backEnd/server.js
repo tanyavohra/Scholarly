@@ -12,6 +12,8 @@ const fs = require('fs');
 const { Poppler } = require('node-poppler');
 const poppler = new Poppler();
 const app = express();
+// Disable ETags globally to prevent 304 responses for polling endpoints (e.g. /processpdf/status/:jobId).
+app.disable("etag");
 const axios = require('axios');
 const bcrypt = require('bcrypt');
 const { generateThumbnail } = require('pdf-thumbnail');
@@ -137,7 +139,7 @@ const FormData = require('form-data'); // If using node-fetch or axios, still us
 const PROCESSPDF_SOURCE_URL_ENABLE =
   process.env.PROCESSPDF_SOURCE_URL_ENABLE != null
     ? truthy(process.env.PROCESSPDF_SOURCE_URL_ENABLE)
-    : Boolean(process.env.RENDER || process.env.NODE_ENV === "production");
+    : false;
 const PROCESSPDF_SOURCE_TTL_MS = (() => {
   const parsed = parseInt(process.env.PROCESSPDF_SOURCE_TTL_MS || `${60 * 60 * 1000}`, 10); // 1 hour
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 60 * 60 * 1000;
@@ -2290,6 +2292,9 @@ app.post("/api/process-pdf", processPdfRateLimit, processPdfConcurrency, process
 
 const processPdfStatusHandler = async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+
     const jobId = req.params.jobId;
     if (!jobId) return res.status(400).json({ error: "Missing jobId" });
 

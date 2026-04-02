@@ -56,29 +56,34 @@ const PdfChatPage = () => {
     const startedAt = Date.now();
     const timeoutMs = 10 * 60 * 1000;
     let notFoundCount = 0;
+    let pollMs = 1500;
     while (Date.now() - startedAt < timeoutMs) {
       try {
         const status = await api.get(`/processpdf/status/${encodeURIComponent(jobId)}`);
         const s = status?.status;
         if (s === "done") return status;
         if (s === "failed") throw new Error(status?.error || "PDF processing failed.");
-        await sleep(2000);
+        await sleep(pollMs);
+        pollMs = Math.min(6000, Math.round(pollMs * 1.2));
       } catch (err) {
         // Transient: Render cold starts / brief timeouts can cause status polling to fail.
         // Keep polling until the overall timeout is reached.
         if (err instanceof ApiError) {
           if (err.status === 404 && notFoundCount < 5) {
             notFoundCount += 1;
-            await sleep(1500);
+            await sleep(pollMs);
+            pollMs = Math.min(6000, Math.round(pollMs * 1.2));
             continue;
           }
           if (err.status >= 500) {
-            await sleep(2000);
+            await sleep(pollMs);
+            pollMs = Math.min(6000, Math.round(pollMs * 1.2));
             continue;
           }
         } else {
           // Network error (fetch threw)
-          await sleep(2000);
+          await sleep(pollMs);
+          pollMs = Math.min(6000, Math.round(pollMs * 1.2));
           continue;
         }
         throw err;

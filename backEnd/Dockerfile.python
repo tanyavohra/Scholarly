@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py pdf_utils.py ./
 
 EXPOSE 10000
-CMD ["sh","-c","gunicorn -b 0.0.0.0:${PORT:-10000} -w ${WEB_CONCURRENCY:-1} --timeout ${GUNICORN_TIMEOUT:-300} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} app:app"]
+CMD ["sh","-c","gunicorn -b 0.0.0.0:${PORT:-10000} -w ${WEB_CONCURRENCY:-1} --timeout ${GUNICORN_TIMEOUT:-900} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} app:app"]

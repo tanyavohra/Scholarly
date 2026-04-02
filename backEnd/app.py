@@ -522,7 +522,9 @@ def healthz():
 def process_pdf_status(job_id: str):
     job = _get_job(job_id)
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        resp = jsonify({"error": "Job not found"})
+        resp.headers["Cache-Control"] = "no-store"
+        return resp, 404
     if _is_job_stale(job):
         job = _update_job(
             job_id,
@@ -533,7 +535,9 @@ def process_pdf_status(job_id: str):
         _clear_active_job_id(job_id)
     if job.get("status") in ("done", "failed"):
         _clear_active_job_id(job_id)
-    return jsonify(job), 200
+    resp = jsonify(job)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp, 200
 
 
 def _run_process_pdf_job(job_id: str, pdf_paths: list[str]):
