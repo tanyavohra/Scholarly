@@ -1,6 +1,9 @@
 {
   "name": "brainlink",
   "private": true,
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "refined:install": "npm --prefix frontend_refined install",
     "refined:dev": "npm --prefix frontend_refined run dev",
