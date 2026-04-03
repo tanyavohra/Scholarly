@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   FileText,
@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api.js";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload.js";
 import { toast } from "@/components/ui/use-toast";
@@ -40,6 +40,7 @@ const UserName = ({ userId }) => {
 
 const NotesPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({
@@ -150,6 +151,30 @@ const NotesPage = () => {
   });
 
   const notes = safeArray(notesQuery.data);
+  const openParam = String(searchParams.get("open") || "").trim();
+  const openHandledRef = useRef(false);
+  const [highlightId, setHighlightId] = useState(null);
+
+  useEffect(() => {
+    if (!openParam) return;
+    if (openHandledRef.current) return;
+    if (notesQuery.isLoading) return;
+    const id = Number(openParam);
+    if (!Number.isFinite(id) || id <= 0) return;
+    openHandledRef.current = true;
+    setHighlightId(id);
+    const t = setTimeout(() => {
+      const el = document.getElementById(`note-card-${id}`);
+      if (el && typeof el.scrollIntoView === "function") {
+        el.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }, 50);
+    const clear = setTimeout(() => setHighlightId(null), 2500);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(clear);
+    };
+  }, [openParam, notesQuery.isLoading]);
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -188,8 +213,14 @@ const NotesPage = () => {
         {notes.map((n) => {
           const isMarked = markedSet.has(n.id);
           const rating = Number(n.rating || 0);
+          const isHighlighted = highlightId === n.id;
           return (
-            <motion.div key={n.id} variants={animItem} className="card-elevated overflow-hidden">
+            <motion.div
+              id={`note-card-${n.id}`}
+              key={n.id}
+              variants={animItem}
+              className={`card-elevated overflow-hidden ${isHighlighted ? "ring-2 ring-primary/40" : ""}`}
+            >
               <div className="p-5">
                 <div className="flex items-start gap-3.5">
                   <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
@@ -209,7 +240,10 @@ const NotesPage = () => {
                         </p>
                       </div>
                       <button
-                        onClick={() => bookmarkMutation.mutate({ noteId: n.id, nextMarked: !isMarked })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          bookmarkMutation.mutate({ noteId: n.id, nextMarked: !isMarked });
+                        }}
                         className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
                           isMarked ? "text-primary" : "text-muted-foreground hover:text-primary"
                         }`}
@@ -222,21 +256,30 @@ const NotesPage = () => {
                     <div className="flex items-center gap-3 mt-3.5 pt-3 border-t border-border/50 flex-wrap">
                       <motion.button
                         whileTap={{ scale: 0.85 }}
-                        onClick={() => voteMutation.mutate({ noteId: n.id, voteType: 1 })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          voteMutation.mutate({ noteId: n.id, voteType: 1 });
+                        }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
                       >
                         <ThumbsUp className="w-3.5 h-3.5" /> {rating}
                       </motion.button>
                       <motion.button
                         whileTap={{ scale: 0.85 }}
-                        onClick={() => voteMutation.mutate({ noteId: n.id, voteType: -1 })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          voteMutation.mutate({ noteId: n.id, voteType: -1 });
+                        }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
                       >
                         <ThumbsDown className="w-3.5 h-3.5" />
                       </motion.button>
 
                       <button
-                        onClick={() => navigate("/pdf-chat", { state: { sourceUrl: n.pdf, note: n } })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate("/pdf-chat", { state: { sourceUrl: n.pdf, note: n } });
+                        }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-scholarly-amethyst transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
                         title="Chat with this PDF"
                       >

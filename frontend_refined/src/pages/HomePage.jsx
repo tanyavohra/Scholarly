@@ -1,4 +1,5 @@
 import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -42,6 +43,20 @@ const HomePage = () => {
   const topQuestions = safeArray(questionsQuery.data);
   const topNotes = safeArray(notesQuery.data);
   const tags = safeArray(tagsQuery.data).slice(0, 8);
+
+  const topQuestionIds = useMemo(() => topQuestions.map((q) => q?.id).filter((id) => id != null), [topQuestions]);
+
+  const answerCountsQuery = useQuery({
+    queryKey: ["homeAnswerCounts", topQuestionIds.join(",")],
+    enabled: topQuestionIds.length > 0,
+    queryFn: async () => {
+      const res = await api.post("/api/answers/counts", { question_ids: topQuestionIds });
+      if (typeof res === "string") throw new Error(res);
+      return (res && typeof res === "object" && res.counts) || {};
+    },
+    staleTime: 30 * 1000,
+  });
+  const answerCounts = answerCountsQuery.data || {};
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -103,21 +118,32 @@ const HomePage = () => {
 
             <motion.div variants={container} initial="hidden" animate="show" className="space-y-3">
               {topQuestions.map((q) => (
-                <motion.div key={q.id} variants={item} className="card-elevated p-5">
-                  <h3 className="font-semibold text-foreground text-sm">{q.title}</h3>
-                  <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <ThumbsUp className="w-3.5 h-3.5" />
-                      {Number(q.rating || 0)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="w-3.5 h-3.5" /> —
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" /> author #{q.author_id}
-                    </span>
-                  </div>
-                </motion.div>
+                <Link to={`/questions?open=${encodeURIComponent(q.id)}`} className="no-underline block">
+                  <motion.div variants={item} className="card-elevated p-5 cursor-pointer hover:bg-muted/20 transition-colors">
+                    <h3 className="font-semibold text-foreground text-sm">{q.title}</h3>
+                    <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <ThumbsUp className="w-3.5 h-3.5" />
+                        {Number(q.rating || 0)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="w-3.5 h-3.5" />{" "}
+                        {(() => {
+                          const count =
+                            answerCounts[String(q.id)] != null
+                              ? Number(answerCounts[String(q.id)])
+                              : answerCounts[q.id] != null
+                                ? Number(answerCounts[q.id])
+                                : null;
+                          return count != null ? count : answerCountsQuery.isLoading ? "…" : 0;
+                        })()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5" /> author #{q.author_id}
+                      </span>
+                    </div>
+                  </motion.div>
+                </Link>
               ))}
               {topQuestions.length === 0 && (
                 <div className="card-elevated p-10 text-center text-sm text-muted-foreground">
@@ -139,26 +165,28 @@ const HomePage = () => {
             </div>
             <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {topNotes.map((n) => (
-                <motion.div key={n.id} variants={item} className="card-elevated p-5">
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5 text-accent" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-foreground text-sm">{n.course_name}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.course_description}</p>
-                      <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <ThumbsUp className="w-3.5 h-3.5" />
-                          {Number(n.rating || 0)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3.5 h-3.5" /> author #{n.author_id}
-                        </span>
+                <Link key={n.id} to={`/notes?open=${encodeURIComponent(n.id)}`} className="no-underline block">
+                  <motion.div variants={item} className="card-elevated p-5 cursor-pointer hover:bg-muted/20 transition-colors">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-accent" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm">{n.course_name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.course_description}</p>
+                        <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <ThumbsUp className="w-3.5 h-3.5" />
+                            {Number(n.rating || 0)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" /> author #{n.author_id}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
+                  </motion.div>
+                </Link>
               ))}
               {topNotes.length === 0 && (
                 <div className="card-elevated p-10 text-center text-sm text-muted-foreground">

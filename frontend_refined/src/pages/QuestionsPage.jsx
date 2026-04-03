@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
@@ -45,6 +45,8 @@ const QuestionsPage = () => {
   const [searchParams] = useSearchParams();
   const qParam = String(searchParams.get("q") || "").trim().toLowerCase();
   const tagParam = String(searchParams.get("tag") || "").trim().toLowerCase();
+  const openParam = String(searchParams.get("open") || "").trim();
+  const openHandledRef = useRef(false);
 
   const questionsQuery = useQuery({
     queryKey: ["questions"],
@@ -215,6 +217,24 @@ const QuestionsPage = () => {
     });
   }, [questions, qParam, tagParam, tagsByQuestionId]);
 
+  useEffect(() => {
+    if (!openParam) return;
+    if (openHandledRef.current) return;
+    const id = Number(openParam);
+    if (!Number.isFinite(id) || id <= 0) return;
+    // Wait until questions are loaded so we can scroll into view.
+    if (questionsQuery.isLoading) return;
+    openHandledRef.current = true;
+    setExpandedId(id);
+    const t = setTimeout(() => {
+      const el = document.getElementById(`question-card-${id}`);
+      if (el && typeof el.scrollIntoView === "function") {
+        el.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [openParam, questionsQuery.isLoading]);
+
   const visibleQuestionIds = useMemo(() => {
     return filteredQuestions.map((q) => q?.id).filter((id) => id != null);
   }, [filteredQuestions]);
@@ -269,7 +289,12 @@ const QuestionsPage = () => {
           const answerCount = isExpanded ? safeArray(comments).length : cachedCount;
 
           return (
-            <motion.div key={q.id} variants={animItem} className="card-elevated overflow-hidden">
+            <motion.div
+              id={`question-card-${q.id}`}
+              key={q.id}
+              variants={animItem}
+              className="card-elevated overflow-hidden"
+            >
               <div
                 className="p-5 cursor-pointer"
                 role="button"
