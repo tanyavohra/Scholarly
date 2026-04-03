@@ -48,6 +48,8 @@ const QuestionTag = require("./models/QuestionTag");
 const MarkedQuestion = require("./models/MarkedQuestion");
 const MarkedNote = require("./models/MarkedNote");
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 let mongoLastError = null;
 mongoose.connection.on("connected", () => {
   mongoLastError = null;
@@ -2061,7 +2063,6 @@ const processPdfHandler = async (req, res) => {
 
     let response;
     try {
-      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const isRetryable = (err) => {
         const code = err?.code;
         if (
