@@ -8,14 +8,21 @@ function npmCmd() {
 
 function runOrThrow(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, {
-    stdio: "inherit",
+    stdio: "pipe",
+    encoding: "utf8",
     shell: process.platform === "win32",
     ...options,
   });
+
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+
   if (result.error) throw result.error;
   if (result.status !== 0) {
     const joined = [cmd, ...args].join(" ");
-    throw new Error(`Command failed (${result.status}): ${joined}`);
+    const combined = [result.stdout, result.stderr].filter(Boolean).join("\n");
+    const tail = combined.length > 6000 ? combined.slice(-6000) : combined;
+    throw new Error(`Command failed (${result.status}): ${joined}\n--- output tail ---\n${tail}`);
   }
 }
 
@@ -91,6 +98,7 @@ function buildRefined() {
 
 function main() {
   const ui = resolveUiTarget();
+  console.log(`[build-ui] node=${process.version} platform=${process.platform} arch=${process.arch}`);
   console.log(`[build-ui] target=${ui}`);
   if (ui === "refined") buildRefined();
   else buildLegacy();
