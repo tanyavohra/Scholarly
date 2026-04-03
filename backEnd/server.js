@@ -450,6 +450,8 @@ app.get("/healthz", async (req, res) => {
     return res.json({
       status: "ok",
       python_base_url: PYTHON_BASE_URL,
+      processpdf_source_url_enable: PROCESSPDF_SOURCE_URL_ENABLE,
+      python_process_pdf_async: PYTHON_PROCESS_PDF_ASYNC,
       ...(process.env.RENDER_GIT_COMMIT ? { git_commit: process.env.RENDER_GIT_COMMIT } : {}),
     });
   } catch (err) {
@@ -1785,6 +1787,51 @@ app.get('/api/answers/count/:questionId', async (req, res) => {
       return res.json({ answer_count: count }); // Returning the count result
   } catch (error) {
       return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post("/api/answers/counts", async (req, res) => {
+  try {
+    const raw = req.body?.question_ids || req.body?.ids || [];
+    const list = Array.isArray(raw) ? raw : [];
+    const cleaned = list
+      .map((v) => (typeof v === "number" ? v : typeof v === "string" ? v.trim() : ""))
+      .filter((v) => v !== "" && v != null);
+
+    if (cleaned.length === 0) return res.json({ counts: {} });
+    if (cleaned.length > 300) return res.status(413).json({ error: "Too many ids" });
+
+    // `question_id` may be stored as number or string depending on legacy imports.
+    const matchIds = new Set();
+    for (const v of cleaned) {
+      matchIds.add(v);
+      matchIds.add(String(v));
+      const n = Number(v);
+      if (Number.isFinite(n)) matchIds.add(n);
+    }
+
+    const rows = await Comment.aggregate([
+      { $match: { question_id: { $in: Array.from(matchIds) } } },
+      { $group: { _id: "$question_id", count: { $sum: 1 } } },
+    ]);
+
+    const counts = {};
+    for (const row of rows || []) {
+      const key = String(row?._id ?? "");
+      if (!key) continue;
+      counts[key] = Number(row?.count || 0);
+    }
+
+    // Ensure every requested id exists in the response.
+    for (const v of cleaned) {
+      const key = String(v);
+      if (counts[key] == null) counts[key] = 0;
+    }
+
+    return res.json({ counts });
+  } catch (error) {
+    console.error("answers/counts ERROR:", error);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

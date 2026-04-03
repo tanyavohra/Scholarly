@@ -173,11 +173,30 @@ const QuestionsPage = () => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["comments", expandedId] });
+      await queryClient.invalidateQueries({ queryKey: ["answerCounts"] });
     },
     onError: (err) => {
       toast({
         title: "Reply failed",
         description: err?.data?.Message || err?.data?.error || err?.message || "Unable to add answer.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const commentVoteMutation = useMutation({
+    mutationFn: async ({ commentId, voteType }) => {
+      const res = await api.post("/commentvote", { target_id: commentId, vote_type: voteType, is_comment: true });
+      if (typeof res === "string" && res.toLowerCase().includes("error")) throw new Error(res);
+      return res;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["comments", expandedId] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Vote failed",
+        description: err?.data?.Message || err?.data?.error || err?.message || "Unable to vote on this answer.",
         variant: "destructive",
       });
     },
@@ -195,6 +214,22 @@ const QuestionsPage = () => {
       return matchesQ && matchesTag;
     });
   }, [questions, qParam, tagParam, tagsByQuestionId]);
+
+  const visibleQuestionIds = useMemo(() => {
+    return filteredQuestions.map((q) => q?.id).filter((id) => id != null);
+  }, [filteredQuestions]);
+
+  const answerCountsQuery = useQuery({
+    queryKey: ["answerCounts", visibleQuestionIds.join(",")],
+    enabled: visibleQuestionIds.length > 0,
+    queryFn: async () => {
+      const res = await api.post("/api/answers/counts", { question_ids: visibleQuestionIds });
+      if (typeof res === "string") throw new Error(res);
+      return (res && typeof res === "object" && res.counts) || {};
+    },
+    staleTime: 30 * 1000,
+  });
+  const answerCounts = answerCountsQuery.data || {};
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -225,15 +260,33 @@ const QuestionsPage = () => {
           const rating = Number(q.rating || 0);
           const isExpanded = expandedId === q.id;
           const comments = isExpanded ? safeArray(commentsQuery.data) : null;
+          const cachedCount =
+            answerCounts[String(q.id)] != null
+              ? Number(answerCounts[String(q.id)])
+              : answerCounts[q.id] != null
+                ? Number(answerCounts[q.id])
+                : null;
+          const answerCount = isExpanded ? safeArray(comments).length : cachedCount;
 
           return (
             <motion.div key={q.id} variants={animItem} className="card-elevated overflow-hidden">
-              <div className="p-5">
+              <div
+                className="p-5 cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setExpandedId(isExpanded ? null : q.id);
+                }}
+              >
                 <div className="flex items-start gap-4">
                   <div className="flex flex-col items-center gap-1 min-w-[48px] pt-1">
                     <motion.button
                       whileTap={{ scale: 0.85 }}
-                      onClick={() => voteMutation.mutate({ targetId: q.id, voteType: 1 })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        voteMutation.mutate({ targetId: q.id, voteType: 1 });
+                      }}
                       className="p-2 rounded-lg hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
                     >
                       <ThumbsUp className="w-4 h-4 text-muted-foreground hover:text-primary" />
@@ -241,7 +294,10 @@ const QuestionsPage = () => {
                     <span className="text-sm font-bold text-foreground">{rating}</span>
                     <motion.button
                       whileTap={{ scale: 0.85 }}
-                      onClick={() => voteMutation.mutate({ targetId: q.id, voteType: -1 })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        voteMutation.mutate({ targetId: q.id, voteType: -1 });
+                      }}
                       className="p-2 rounded-lg hover:bg-destructive/10 transition-colors bg-transparent border-0 cursor-pointer"
                     >
                       <ThumbsDown className="w-4 h-4 text-muted-foreground hover:text-destructive" />
@@ -260,9 +316,10 @@ const QuestionsPage = () => {
                       )}
 
                       <button
-                        onClick={() =>
-                          bookmarkMutation.mutate({ questionId: q.id, nextMarked: !isMarked })
-                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          bookmarkMutation.mutate({ questionId: q.id, nextMarked: !isMarked });
+                        }}
                         className={`ml-auto p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
                           isMarked ? "text-primary" : "text-muted-foreground hover:text-primary"
                         }`}
@@ -275,7 +332,7 @@ const QuestionsPage = () => {
                     <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1">
                         <MessageCircle className="w-3.5 h-3.5" />
-                        {isExpanded ? safeArray(comments).length : "—"}
+                        {answerCount != null ? answerCount : answerCountsQuery.isLoading ? "…" : 0}
                       </span>
                       <span className="flex items-center gap-1">
                         <ThumbsUp className="w-3.5 h-3.5" />
@@ -293,7 +350,10 @@ const QuestionsPage = () => {
                         </span>
                       ))}
                       <button
-                        onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedId(isExpanded ? null : q.id);
+                        }}
                         className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
                       >
                         {isExpanded ? (
@@ -347,7 +407,29 @@ const QuestionsPage = () => {
                             </div>
                             <p className="text-sm text-muted-foreground mt-0.5">{c.content}</p>
                             <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground/70">
-                              <ThumbsUp className="w-2.5 h-2.5" /> {Number(c.rating || 0)}
+                              <motion.button
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  commentVoteMutation.mutate({ commentId: c.id, voteType: 1 });
+                                }}
+                                className="p-1 rounded-md hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
+                                title="Like"
+                              >
+                                <ThumbsUp className="w-3 h-3" />
+                              </motion.button>
+                              <span className="min-w-[18px] text-center">{Number(c.rating || 0)}</span>
+                              <motion.button
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  commentVoteMutation.mutate({ commentId: c.id, voteType: -1 });
+                                }}
+                                className="p-1 rounded-md hover:bg-destructive/10 transition-colors bg-transparent border-0 cursor-pointer"
+                                title="Dislike"
+                              >
+                                <ThumbsDown className="w-3 h-3" />
+                              </motion.button>
                             </div>
                           </div>
                         </div>

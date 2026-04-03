@@ -86,6 +86,7 @@ _MONGO_CLIENT = None
 _MONGO_DB = None
 _GRIDFS = None
 _MONGO_INIT_LOCK = threading.Lock()
+_MONGO_LAST_ERROR = None
 
 
 def _mongo_db():
@@ -123,6 +124,7 @@ def _mongo_db():
 
             _MONGO_DB = db
             _GRIDFS = gridfs.GridFS(db, collection=PDF_GRIDFS_BUCKET)
+            globals()["_MONGO_LAST_ERROR"] = None
 
             # Best-effort indexes (safe to ignore failures on free tiers).
             try:
@@ -135,6 +137,7 @@ def _mongo_db():
 
             return _MONGO_DB
         except Exception as e:
+            globals()["_MONGO_LAST_ERROR"] = str(e)
             print(json.dumps({"type": "mongo_init_error", "error": str(e)}), flush=True)
             return None
 
@@ -626,7 +629,18 @@ def _wait_for_slot_and_start_job(job_id: str, runner, runner_args):
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"status": "ok"}), 200
+    db = _mongo_db() if USE_MONGO else _MONGO_DB
+    resp = {
+        "status": "ok",
+        "uptime_s": int(time.time() - _PROCESS_START_TS),
+        "pid": os.getpid(),
+        "mongo_enabled": bool(USE_MONGO),
+        "mongo_initialized": bool(_MONGO_CLIENT is not None and _MONGO_DB is not None),
+        "mongo_db": getattr(db, "name", None) if db is not None else None,
+        "gridfs_bucket": PDF_GRIDFS_BUCKET if USE_MONGO else None,
+        "mongo_last_error": _MONGO_LAST_ERROR if USE_MONGO else None,
+    }
+    return jsonify(resp), 200
 
 
 @app.get("/process_pdf/status/<job_id>")
