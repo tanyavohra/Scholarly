@@ -11,7 +11,12 @@ import time
 import uuid
 import urllib.parse
 import urllib.request
+import zipfile
 from dotenv import load_dotenv
+
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+import gridfs
 
 load_dotenv()
 
@@ -72,6 +77,87 @@ CORS(
 )
 
 
+MONGO_URI = (os.getenv("MONGO_URI") or "").strip() or None
+PDF_MONGO_DB = (os.getenv("PDF_MONGO_DB") or "").strip() or None
+PDF_GRIDFS_BUCKET = (os.getenv("PDF_GRIDFS_BUCKET") or "pdf_fs").strip() or "pdf_fs"
+USE_MONGO = bool(MONGO_URI)
+
+_MONGO_CLIENT = None
+_MONGO_DB = None
+_GRIDFS = None
+_MONGO_INIT_LOCK = threading.Lock()
+
+
+def _mongo_db():
+    global _MONGO_CLIENT, _MONGO_DB, _GRIDFS
+    if not USE_MONGO:
+        return None
+
+    if _MONGO_DB is not None:
+        return _MONGO_DB
+
+    with _MONGO_INIT_LOCK:
+        if _MONGO_DB is not None:
+            return _MONGO_DB
+        try:
+            _MONGO_CLIENT = MongoClient(
+                MONGO_URI,
+                serverSelectionTimeoutMS=int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "8000")),
+                connectTimeoutMS=int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "8000")),
+                retryWrites=True,
+            )
+            try:
+                _MONGO_CLIENT.admin.command("ping")
+            except Exception:
+                # Ping may fail during cold start; queries will surface errors.
+                pass
+
+            try:
+                db = _MONGO_CLIENT.get_default_database()
+            except Exception:
+                db = None
+
+            if db is None:
+                db_name = PDF_MONGO_DB or "brainlink"
+                db = _MONGO_CLIENT[db_name]
+
+            _MONGO_DB = db
+            _GRIDFS = gridfs.GridFS(db, collection=PDF_GRIDFS_BUCKET)
+
+            # Best-effort indexes (safe to ignore failures on free tiers).
+            try:
+                db["pdf_jobs"].create_index("job_id", unique=True)
+                db["pdf_jobs"].create_index("doc_id")
+                db["pdf_state"].create_index("key", unique=True)
+                db[f"{PDF_GRIDFS_BUCKET}.files"].create_index([("metadata.doc_id", 1), ("metadata.kind", 1)])
+            except Exception:
+                pass
+
+            return _MONGO_DB
+        except Exception as e:
+            print(json.dumps({"type": "mongo_init_error", "error": str(e)}), flush=True)
+            return None
+
+
+def _jobs_col():
+    db = _mongo_db()
+    if db is None:
+        return None
+    return db["pdf_jobs"]
+
+
+def _state_col():
+    db = _mongo_db()
+    if db is None:
+        return None
+    return db["pdf_state"]
+
+
+def _grid_fs():
+    _mongo_db()
+    return _GRIDFS if USE_MONGO else None
+
+
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FAISS_DIR = os.getenv("FAISS_DIR", "faiss_index")  # folder where index is saved
 if not os.path.isabs(FAISS_DIR):
@@ -81,6 +167,12 @@ os.makedirs(FAISS_DIR, exist_ok=True)
 _DATA_ROOT = os.path.dirname(FAISS_DIR) or _BASE_DIR
 JOBS_DIR = os.getenv("JOBS_DIR", os.path.join(_DATA_ROOT, "jobs"))
 os.makedirs(JOBS_DIR, exist_ok=True)
+
+FAISS_CACHE_DIR = os.getenv("FAISS_CACHE_DIR", os.path.join("/tmp", "brainlink_faiss_cache"))
+try:
+    os.makedirs(FAISS_CACHE_DIR, exist_ok=True)
+except Exception:
+    pass
 
 _JOBS = {}
 _JOBS_LOCK = threading.Lock()
@@ -359,6 +451,16 @@ def _job_status_path(job_id: str) -> str:
 
 
 def _persist_job(job: dict) -> None:
+    col = _jobs_col()
+    if col is not None:
+        try:
+            col.update_one({"job_id": job["job_id"]}, {"$set": job}, upsert=True)
+            return
+        except PyMongoError as e:
+            print(json.dumps({"type": "mongo_job_persist_error", "error": str(e)}), flush=True)
+        except Exception as e:
+            print(json.dumps({"type": "mongo_job_persist_error", "error": str(e)}), flush=True)
+
     os.makedirs(_job_dir(job["job_id"]), exist_ok=True)
     tmp_path = _job_status_path(job["job_id"]) + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
@@ -367,6 +469,15 @@ def _persist_job(job: dict) -> None:
 
 
 def _load_persisted_job(job_id: str):
+    col = _jobs_col()
+    if col is not None:
+        try:
+            doc = col.find_one({"job_id": job_id}, {"_id": 0})
+            return doc
+        except Exception as e:
+            print(json.dumps({"type": "mongo_job_load_error", "error": str(e)}), flush=True)
+            # fall through to disk
+
     path = _job_status_path(job_id)
     if not os.path.exists(path):
         return None
@@ -540,7 +651,160 @@ def process_pdf_status(job_id: str):
     return resp, 200
 
 
-def _run_process_pdf_job(job_id: str, pdf_paths: list[str]):
+def _set_latest_doc_id(doc_id: str) -> None:
+    col = _state_col()
+    if col is None:
+        return
+    try:
+        now = int(time.time())
+        col.update_one(
+            {"key": "latest_doc_id"},
+            {"$set": {"key": "latest_doc_id", "doc_id": doc_id, "updated_at": now}},
+            upsert=True,
+        )
+    except Exception:
+        return
+
+
+def _get_latest_doc_id() -> str | None:
+    col = _state_col()
+    if col is None:
+        return None
+    try:
+        doc = col.find_one({"key": "latest_doc_id"}, {"_id": 0})
+        val = str((doc or {}).get("doc_id") or "").strip()
+        return val or None
+    except Exception:
+        return None
+
+
+def _gridfs_find_latest_doc_index(doc_id: str):
+    fs = _grid_fs()
+    if fs is None:
+        return None
+    try:
+        cur = fs.find({"metadata.kind": "faiss", "metadata.doc_id": doc_id}).sort("uploadDate", -1).limit(1)
+        for f in cur:
+            return f
+        return None
+    except Exception as e:
+        print(json.dumps({"type": "gridfs_find_error", "error": str(e)}), flush=True)
+        return None
+
+
+def _gridfs_delete_doc_indexes(doc_id: str) -> None:
+    fs = _grid_fs()
+    if fs is None:
+        return
+    try:
+        for f in fs.find({"metadata.kind": "faiss", "metadata.doc_id": doc_id}):
+            try:
+                fs.delete(f._id)
+            except Exception:
+                pass
+    except Exception:
+        return
+
+
+def _zip_dir(src_dir: str, dst_zip_path: str) -> None:
+    with zipfile.ZipFile(dst_zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for root, _dirs, files in os.walk(src_dir):
+            for name in files:
+                abs_path = os.path.join(root, name)
+                rel_path = os.path.relpath(abs_path, src_dir)
+                zf.write(abs_path, rel_path)
+
+
+def _gridfs_store_doc_index(doc_id: str, index_dir: str) -> dict | None:
+    fs = _grid_fs()
+    if fs is None:
+        return None
+
+    zip_path = os.path.join(_DATA_ROOT, f".faiss_{doc_id}.zip")
+    try:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+    except Exception:
+        pass
+
+    try:
+        _zip_dir(index_dir, zip_path)
+        _gridfs_delete_doc_indexes(doc_id)
+        with open(zip_path, "rb") as f:
+            file_id = fs.put(
+                f,
+                filename=f"faiss-{doc_id}.zip",
+                metadata={"kind": "faiss", "doc_id": doc_id},
+                content_type="application/zip",
+            )
+        return {"file_id": str(file_id), "filename": f"faiss-{doc_id}.zip"}
+    except Exception as e:
+        print(json.dumps({"type": "gridfs_store_error", "doc_id": doc_id, "error": str(e)}), flush=True)
+        return None
+    finally:
+        try:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+        except Exception:
+            pass
+
+
+def _ensure_doc_index_local(doc_id: str) -> str | None:
+    if not doc_id:
+        return None
+
+    dest_dir = os.path.join(FAISS_CACHE_DIR, doc_id)
+    index_file = os.path.join(dest_dir, "index.faiss")
+    if os.path.exists(index_file):
+        return dest_dir
+
+    fs = _grid_fs()
+    if fs is None:
+        return None
+
+    grid_out = _gridfs_find_latest_doc_index(doc_id)
+    if grid_out is None:
+        return None
+
+    tmp_zip = os.path.join(FAISS_CACHE_DIR, f".dl_{doc_id}.zip")
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        with open(tmp_zip, "wb") as out:
+            while True:
+                chunk = grid_out.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+
+        # Extract into a clean dir.
+        for name in os.listdir(dest_dir):
+            try:
+                p = os.path.join(dest_dir, name)
+                if os.path.isdir(p):
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    os.remove(p)
+            except Exception:
+                pass
+
+        with zipfile.ZipFile(tmp_zip, "r") as zf:
+            zf.extractall(dest_dir)
+
+        if os.path.exists(index_file):
+            return dest_dir
+        return None
+    except Exception as e:
+        print(json.dumps({"type": "gridfs_extract_error", "doc_id": doc_id, "error": str(e)}), flush=True)
+        return None
+    finally:
+        try:
+            if os.path.exists(tmp_zip):
+                os.remove(tmp_zip)
+        except Exception:
+            pass
+
+
+def _run_process_pdf_job(job_id: str, doc_id: str, pdf_paths: list[str]):
     try:
         _update_job(
             job_id,
@@ -548,6 +812,7 @@ def _run_process_pdf_job(job_id: str, pdf_paths: list[str]):
             step="extract_text",
             message="Extracting text",
             pid=os.getpid(),
+            doc_id=doc_id,
         )
 
         from pdf_utils import iter_text_chunks_from_pdfs, get_vector_store
@@ -583,12 +848,30 @@ def _run_process_pdf_job(job_id: str, pdf_paths: list[str]):
                 except Exception:
                     pass
 
-        _update_job(job_id, step="swap_index", message="Finalizing index")
-        if os.path.exists(FAISS_DIR):
-            shutil.rmtree(FAISS_DIR, ignore_errors=True)
-        os.rename(tmp_dir, FAISS_DIR)
+        _update_job(job_id, step="store_index", message="Storing index")
+        index_ok = os.path.exists(os.path.join(tmp_dir, "index.faiss"))
+        stored = None
+        if index_ok and USE_MONGO:
+            stored = _gridfs_store_doc_index(doc_id, tmp_dir)
 
-        index_ok = os.path.exists(os.path.join(FAISS_DIR, "index.faiss"))
+        _update_job(job_id, step="swap_index", message="Finalizing index")
+        try:
+            if os.path.exists(FAISS_DIR):
+                shutil.rmtree(FAISS_DIR, ignore_errors=True)
+            os.rename(tmp_dir, FAISS_DIR)
+        except Exception:
+            pass
+
+        # Cache by doc_id for this runtime (so ask_question doesn't immediately re-download).
+        try:
+            doc_cache_dir = os.path.join(FAISS_CACHE_DIR, doc_id)
+            if os.path.exists(doc_cache_dir):
+                shutil.rmtree(doc_cache_dir, ignore_errors=True)
+            if os.path.exists(FAISS_DIR):
+                shutil.copytree(FAISS_DIR, doc_cache_dir, dirs_exist_ok=True)
+        except Exception:
+            pass
+
         _update_job(
             job_id,
             status="done",
@@ -596,8 +879,13 @@ def _run_process_pdf_job(job_id: str, pdf_paths: list[str]):
             index_built=bool(index_ok),
             message="PDF processed successfully",
             faiss_dir=FAISS_DIR,
+            doc_id=doc_id,
+            index_stored=bool(stored),
+            index_storage=stored,
             pid=os.getpid(),
         )
+        if index_ok:
+            _set_latest_doc_id(doc_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -609,7 +897,7 @@ def _run_process_pdf_job(job_id: str, pdf_paths: list[str]):
         _clear_active_job_id(job_id)
 
 
-def _run_process_pdf_job_from_urls(job_id: str, source_urls: list[str]):
+def _run_process_pdf_job_from_urls(job_id: str, doc_id: str, source_urls: list[str]):
     try:
         job_dir = _job_dir(job_id)
         os.makedirs(job_dir, exist_ok=True)
@@ -627,6 +915,7 @@ def _run_process_pdf_job_from_urls(job_id: str, source_urls: list[str]):
             step="download_pdf",
             message="Downloading PDF",
             pid=os.getpid(),
+            doc_id=doc_id,
         )
         pdf_paths = []
         for i, url in enumerate(source_urls or []):
@@ -634,7 +923,7 @@ def _run_process_pdf_job_from_urls(job_id: str, source_urls: list[str]):
             _download_url_to_path(url, dst, max_bytes=max_bytes)
             pdf_paths.append(dst)
 
-        _run_process_pdf_job(job_id, pdf_paths)
+        _run_process_pdf_job(job_id, doc_id, pdf_paths)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -679,9 +968,11 @@ def process_pdf():
 
     if use_async:
         job_id = uuid.uuid4().hex
+        doc_id = uuid.uuid4().hex
         created_at = int(time.time())
         job = {
             "job_id": job_id,
+            "doc_id": doc_id,
             "status": "queued",
             "step": "queued",
             "created_at": created_at,
@@ -707,11 +998,11 @@ def process_pdf():
                 pdf_paths.append(dst)
 
             runner = _run_process_pdf_job
-            runner_args = (job_id, pdf_paths)
+            runner_args = (job_id, doc_id, pdf_paths)
         else:
             _update_job(job_id, source_urls=source_urls, message="Queued URL download")
             runner = _run_process_pdf_job_from_urls
-            runner_args = (job_id, source_urls)
+            runner_args = (job_id, doc_id, source_urls)
 
         # Try to start immediately; otherwise enqueue and respond with the job id.
         if _set_active_job_id(job_id):
@@ -728,13 +1019,14 @@ def process_pdf():
                 args=(job_id, runner, runner_args),
                 daemon=True,
             ).start()
-        return jsonify({"job_id": job_id, "status": "queued"}), 202
+        return jsonify({"job_id": job_id, "doc_id": doc_id, "status": "queued"}), 202
 
     # Synchronous path: guard against corrupting FAISS_DIR while another job is running.
     active = _get_active_job()
     if active:
-        return jsonify({"error": "A PDF is already processing", "job_id": active.get("job_id")}), 409
+        return jsonify({"error": "A PDF is already processing", "job_id": active.get("job_id"), "doc_id": active.get("doc_id")}), 409
 
+    doc_id = uuid.uuid4().hex
     try:
         from pdf_utils import iter_text_chunks_from_pdfs, get_vector_store
 
@@ -783,9 +1075,20 @@ def process_pdf():
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
         index_ok = os.path.exists(os.path.join(FAISS_DIR, "index.faiss"))
+        stored = None
+        if index_ok and USE_MONGO:
+            stored = _gridfs_store_doc_index(doc_id, FAISS_DIR)
+            _set_latest_doc_id(doc_id)
         print("PDF processed successfully.")
         return jsonify(
-            {"message": "PDF processed successfully", "faiss_dir": FAISS_DIR, "index_built": bool(index_ok)}
+            {
+                "message": "PDF processed successfully",
+                "faiss_dir": FAISS_DIR,
+                "index_built": bool(index_ok),
+                "doc_id": doc_id,
+                "index_stored": bool(stored),
+                "index_storage": stored,
+            }
         ), 200
 
     except Exception as e:
@@ -808,16 +1111,30 @@ def process_pdf():
 @app.route("/ask_question", methods=["POST"])
 def ask_question_route():
     try:
-        data = request.get_json(force=True)
-        question = data.get("question", "").strip()
+        data = request.get_json(force=True) or {}
+        question = str(data.get("question") or "").strip()
         print("Received question:", question)
-        if not os.path.isdir(FAISS_DIR) or not os.path.exists(os.path.join(FAISS_DIR, "index.faiss")):
-            return jsonify({"error": "PDF not processed. Call /process_pdf first."}), 400
+        if not question:
+            return jsonify({"error": "Missing question"}), 400
+
+        doc_id = str(data.get("doc_id") or data.get("docId") or "").strip()
+        if not doc_id:
+            doc_id = _get_latest_doc_id() or ""
+
+        index_path = None
+        if doc_id and USE_MONGO:
+            index_path = _ensure_doc_index_local(doc_id)
+
+        if not index_path and os.path.isdir(FAISS_DIR) and os.path.exists(os.path.join(FAISS_DIR, "index.faiss")):
+            index_path = FAISS_DIR
+
+        if not index_path:
+            return jsonify({"error": "Index not found. Process the PDF again.", "doc_id": doc_id or None}), 404
         from pdf_utils import answer_question
-        response = answer_question(question, index_path=FAISS_DIR)
+        response = answer_question(question, index_path=index_path)
         out_text = response.get("output_text") if isinstance(response, dict) else str(response)
         print("Answer generated:", out_text[:200])
-        return jsonify({"response": out_text}), 200
+        return jsonify({"response": out_text, "doc_id": doc_id or None}), 200
     except Exception as e:
         import traceback
         traceback.print_exc()

@@ -2348,10 +2348,12 @@ const askQuestionHandler = async (req, res) => {
   try {
     const question = String(req.body?.question || "").trim();
     if (!question) return res.status(400).json({ error: "Missing question" });
+    const docId = String(req.body?.doc_id || req.body?.docId || "").trim();
+    const payload = docId ? { question, doc_id: docId } : { question };
 
     const response = await axios.post(
       `${PYTHON_BASE_URL}/ask_question`,
-      { question },
+      payload,
       {
         headers: req.id ? { "x-request-id": req.id } : undefined,
         timeout: PYTHON_ASK_TIMEOUT_MS,

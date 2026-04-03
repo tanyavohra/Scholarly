@@ -22,12 +22,14 @@ const PdfChatPage = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [processed, setProcessed] = useState(false);
+  const [docId, setDocId] = useState("");
   const autoStartedRef = useRef(false);
 
   useEffect(() => {
     // Switching documents resets state.
     setProcessed(false);
     setPdfFile(null);
+    setDocId("");
     autoStartedRef.current = false;
     setMessages([
       {
@@ -109,12 +111,14 @@ const PdfChatPage = () => {
       if (res?.job_id) {
         const job = await waitForJob(res.job_id);
         if (job?.index_built === false) throw new Error("Embeddings/index were not created.");
+        setDocId(String(job?.doc_id || res?.doc_id || ""));
         toast({ title: "Ready", description: "PDF processed successfully." });
         setProcessed(true);
         return;
       }
 
       if (res?.index_built === false) throw new Error("Embeddings/index were not created.");
+      setDocId(String(res?.doc_id || ""));
       toast({ title: "Ready", description: "PDF processed successfully." });
       setProcessed(true);
     } catch (err) {
@@ -131,6 +135,7 @@ const PdfChatPage = () => {
         try {
           const job = await waitForJob(err.data.job_id);
           if (job?.index_built === false) throw new Error("Embeddings/index were not created.");
+          setDocId(String(job?.doc_id || ""));
           toast({ title: "Ready", description: "PDF processed successfully." });
           setProcessed(true);
         } catch (waitErr) {
@@ -158,7 +163,8 @@ const PdfChatPage = () => {
     setInput("");
 
     try {
-      const res = await api.post("/ask_question", { question: q });
+      const payload = docId ? { question: q, doc_id: docId } : { question: q };
+      const res = await api.post("/ask_question", payload);
       setMessages((prev) => [...prev, { role: "system", text: res?.response || "No response." }]);
     } catch (err) {
       toast({

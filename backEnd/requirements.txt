@@ -3,6 +3,7 @@ flask
 flask-cors
 python-dotenv
 gunicorn
+pymongo[srv]>=4.6.0
 
 # PDF
 PyPDF2
