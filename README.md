@@ -23,10 +23,10 @@ Most of the time, notes, links, PDFs, and references end up scattered everywhere
 
 ##  Tech Stack
 
-*Front-end : React.js
-*Back-end : Node.js ,Express.js
-*Database and storage : MongoDB,Cloudinary
-*Microservice : Python
+* Front-end : React.js
+* Back-end : Node.js ,Express.js
+* Database and storage : MongoDB,Cloudinary
+* Microservice : Python
 
 ##  Status
 
