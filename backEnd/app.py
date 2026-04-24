@@ -526,6 +526,17 @@ def _is_job_stale(job: dict) -> bool:
         return False
 
 
+def _pid_alive(pid: int | None) -> bool:
+    if not pid or pid <= 0:
+        return False
+    # Linux containers: os.kill(pid, 0) checks existence without sending a signal.
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except Exception:
+        return False
+
+
 def _get_active_job():
     active_id = _get_active_job_id()
     if not active_id:
@@ -537,6 +548,25 @@ def _get_active_job():
         return None
 
     if job.get("status") in ("queued", "running") and not _is_job_stale(job):
+        # If the worker died (OOM/restart), clear the lock quickly so queued jobs can proceed.
+        worker_pid = job.get("worker_pid") or job.get("worker_pid".upper()) or job.get("pid")
+        try:
+            worker_pid = int(worker_pid) if worker_pid is not None else None
+        except Exception:
+            worker_pid = None
+        if worker_pid and not _pid_alive(worker_pid):
+            try:
+                _update_job(
+                    active_id,
+                    status="failed",
+                    step="worker_died",
+                    error="Active job worker process is not alive (likely OOM/restart).",
+                    worker_pid=worker_pid,
+                )
+            except Exception:
+                pass
+            _clear_active_job_id(active_id)
+            return None
         return job
 
     if _is_job_stale(job):
@@ -644,6 +674,7 @@ def _wait_for_slot_and_start_job(job_id: str, runner, runner_args):
 @app.get("/healthz")
 def healthz():
     db = _mongo_db() if USE_MONGO else _MONGO_DB
+    active = _get_active_job()
     resp = {
         "status": "ok",
         "uptime_s": int(time.time() - _PROCESS_START_TS),
@@ -656,6 +687,18 @@ def healthz():
         "process_pdf_async_default": bool(PROCESS_PDF_ASYNC_DEFAULT),
         "process_pdf_use_subprocess_default": bool(PROCESS_PDF_USE_SUBPROCESS_DEFAULT),
         "job_stale_after_secs": int(JOB_STALE_AFTER_SECS),
+        "active_job": (
+            {
+                "job_id": active.get("job_id"),
+                "doc_id": active.get("doc_id"),
+                "status": active.get("status"),
+                "step": active.get("step"),
+                "updated_at": active.get("updated_at"),
+                "worker_pid": active.get("worker_pid") or active.get("pid"),
+            }
+            if isinstance(active, dict)
+            else None
+        ),
     }
     return jsonify(resp), 200
 
