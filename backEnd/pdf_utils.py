@@ -165,21 +165,69 @@ def generate_answer(question: str, context: str) -> str:
 
     prompt = (
         "Answer the question using ONLY the context.\n"
-        "If the answer is not in the context, say: \"I don't know.\".\n\n"
+        "If the answer is not in the context, say: \"I don't know.\".\n"
+        "Write a concise answer in 3–6 sentences (max ~120 words).\n"
+        "Do not repeat the same sentence or paragraph.\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {question}\n"
         "Answer:"
     )
 
+    def _postprocess_answer(raw: str) -> str:
+        text = (raw or "").strip()
+        if not text:
+            return ""
+
+        # Some hosted endpoints may echo parts of the prompt.
+        if "Answer:" in text:
+            text = text.split("Answer:", 1)[-1].strip()
+
+        # De-dupe repeated paragraphs (very common failure mode on small/free models).
+        paras = [p.strip() for p in re.split(r"\n\s*\n+", text) if p.strip()]
+        seen = set()
+        deduped = []
+        for p in paras:
+            key = re.sub(r"\s+", " ", p).strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(p)
+        text = "\n\n".join(deduped).strip()
+
+        # Word cap (keeps UX snappy + avoids runaway repetition).
+        try:
+            max_words = int(os.getenv("QA_MAX_WORDS") or "140")
+        except ValueError:
+            max_words = 140
+        if max_words > 0:
+            words = text.split()
+            if len(words) > max_words:
+                text = " ".join(words[:max_words]).rstrip() + "…"
+
+        return text
+
     client = InferenceClient(model=model, token=token, timeout=timeout_s)
     # `text_generation` works for most hosted text2text/text-generation endpoints.
+    try:
+        repetition_penalty = float(os.getenv("QA_REPETITION_PENALTY") or "1.15")
+    except ValueError:
+        repetition_penalty = 1.15
+    try:
+        top_p = float(os.getenv("QA_TOP_P") or "0.9")
+    except ValueError:
+        top_p = 0.9
+    do_sample = _truthy(os.getenv("QA_DO_SAMPLE") or "0")
+
     out = client.text_generation(
         prompt,
         max_new_tokens=max_new_tokens,
         temperature=temperature,
+        top_p=top_p,
+        do_sample=do_sample,
+        repetition_penalty=repetition_penalty,
         return_full_text=False,
     )
-    return (out or "").strip()
+    return _postprocess_answer(out)
 
 
 def coerce_to_seekable(stream):
@@ -193,4 +241,3 @@ def coerce_to_seekable(stream):
     except Exception:
         data = stream.read()
         return BytesIO(data)
-
