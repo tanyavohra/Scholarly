@@ -8,17 +8,6 @@ try:
 except ImportError:  # pragma: no cover
     from langchain.text_splitter import CharacterTextSplitter
 
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-
-# HuggingFacePipeline moved into langchain-community in newer versions.
-try:
-    from langchain_community.llms import HuggingFacePipeline
-except ImportError:  # pragma: no cover
-    from langchain.llms import HuggingFacePipeline
-
-
-
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 _EMBEDDINGS = None
@@ -30,6 +19,9 @@ _VECTOR_STORE_META = None
 def _get_embeddings():
     global _EMBEDDINGS
     if _EMBEDDINGS is None:
+        # Import lazily to avoid paying torch/sentence-transformers import cost on module import.
+        from langchain_huggingface import HuggingFaceEmbeddings
+
         model_name = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
         encode_kwargs = {}
         batch_size = os.getenv("EMBEDDING_MODEL_BATCH_SIZE")
@@ -50,7 +42,12 @@ def _get_llm():
 
         # Prefer the hosted Hugging Face Inference API when a token is present.
         # This avoids downloading/initializing large models inside the Render container.
-        use_hf_hub = backend in ("hf_hub", "huggingface_hub", "hf_api") or (backend == "auto" and bool(hf_token))
+        force_hf_hub = backend in ("hf_hub", "huggingface_hub", "hf_api")
+        use_hf_hub = force_hf_hub or (backend == "auto" and bool(hf_token))
+
+        if force_hf_hub and not hf_token:
+            raise ValueError("QA_BACKEND=hf_hub requires HUGGINGFACEHUB_API_TOKEN to be set.")
+
         if use_hf_hub:
             try:
                 from langchain_community.llms import HuggingFaceHub
@@ -80,11 +77,19 @@ def _get_llm():
                 _LLM = HuggingFaceHub(repo_id=repo_id, task=task, model_kwargs=model_kwargs)
                 return _LLM
             except Exception as e:
+                if force_hf_hub:
+                    raise
                 # Fall back to local pipeline if hosted inference is unavailable/misconfigured.
                 print(f"WARNING: QA_BACKEND=hf_hub failed ({e}); falling back to local transformers.", flush=True)
 
         # Fallback: local transformers pipeline (heavier; may OOM on small instances).
         # Import transformers lazily so embedding-only workloads don't pay the import cost/memory.
+        # HuggingFacePipeline moved into langchain-community in newer versions.
+        try:
+            from langchain_community.llms import HuggingFacePipeline
+        except ImportError:  # pragma: no cover
+            from langchain.llms import HuggingFacePipeline
+
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 
         model_name = os.getenv("QA_MODEL_NAME", "google/flan-t5-small")
@@ -149,6 +154,8 @@ def iter_text_chunks_from_pdfs(pdf_files, chunk_size=1000, chunk_overlap=200):
 def get_vector_store(chunks, store_dir="faiss_index"):
     os.makedirs(store_dir, exist_ok=True)
     embeddings = _get_embeddings()
+    # Import lazily to avoid faiss import cost on module import.
+    from langchain_community.vectorstores import FAISS
 
     max_chunks = os.getenv("MAX_CHUNKS")
     max_chunks_limit = None
@@ -163,7 +170,7 @@ def get_vector_store(chunks, store_dir="faiss_index"):
         # Render free/low-tier instances can OOM on very large PDFs.
         # Put a conservative cap unless the operator explicitly configures MAX_CHUNKS.
         if os.getenv("RENDER"):
-            max_chunks_limit = 1500
+            max_chunks_limit = 1000
 
     default_batch = "32" if os.getenv("RENDER") else "64"
     try:
@@ -212,6 +219,8 @@ def answer_question(question, index_path="faiss_index"):
 
     global _VECTOR_STORE, _VECTOR_STORE_META
     embeddings = _get_embeddings()
+    # Import lazily to avoid faiss import cost on module import.
+    from langchain_community.vectorstores import FAISS
 
     # Cache the loaded index to avoid re-loading (and re-allocating) on every query.
     index_file = os.path.join(index_path, "index.faiss")

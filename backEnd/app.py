@@ -353,7 +353,9 @@ def _download_url_to_path(url: str, dest_path: str, max_bytes: int | None = None
     if not _is_http_url(url):
         raise ValueError("Invalid URL (must be http/https)")
 
-    timeout_secs = int(os.getenv("PDF_DOWNLOAD_TIMEOUT_SECS", "25"))
+    timeout_secs = int(
+        os.getenv("PDF_DOWNLOAD_TIMEOUT_SECS", "60" if os.getenv("RENDER") else "25")
+    )
     req = urllib.request.Request(url, headers={"User-Agent": "brainlink/1.0"})
 
     total = 0
@@ -555,6 +557,18 @@ def _start_background_job(job_id: str, target, args):
     # Use a subprocess by default on Render so heavy PDF/embedding work releases RSS when done.
     # This also isolates crashes from the web worker process.
     use_subprocess = PROCESS_PDF_USE_SUBPROCESS_DEFAULT and os.name != "nt"
+    # Safety: on Render free tiers you typically run with a single web worker. If we run the
+    # heavy PDF/embedding work in-thread, the status endpoint can become unresponsive and
+    # the Node service will time out while polling. Force subprocess mode on Render.
+    if os.getenv("RENDER") and os.name != "nt" and not use_subprocess:
+        use_subprocess = True
+        try:
+            _update_job(
+                job_id,
+                message="PROCESS_PDF_USE_SUBPROCESS was disabled; forcing subprocess mode on Render for stability.",
+            )
+        except Exception:
+            pass
     if use_subprocess:
         try:
             ctx = multiprocessing.get_context(PROCESS_PDF_SUBPROCESS_START_METHOD)
@@ -639,6 +653,9 @@ def healthz():
         "mongo_db": getattr(db, "name", None) if db is not None else None,
         "gridfs_bucket": PDF_GRIDFS_BUCKET if USE_MONGO else None,
         "mongo_last_error": _MONGO_LAST_ERROR if USE_MONGO else None,
+        "process_pdf_async_default": bool(PROCESS_PDF_ASYNC_DEFAULT),
+        "process_pdf_use_subprocess_default": bool(PROCESS_PDF_USE_SUBPROCESS_DEFAULT),
+        "job_stale_after_secs": int(JOB_STALE_AFTER_SECS),
     }
     return jsonify(resp), 200
 
@@ -829,7 +846,9 @@ def _run_process_pdf_job(job_id: str, doc_id: str, pdf_paths: list[str]):
             doc_id=doc_id,
         )
 
-        from pdf_utils import iter_text_chunks_from_pdfs, get_vector_store
+        # Import chunking helpers first (lightweight). Embedding/FAISS imports are heavier,
+        # so we load them only after updating the job step to "build_index".
+        from pdf_utils import iter_text_chunks_from_pdfs
 
         streams = []
         try:
@@ -844,6 +863,7 @@ def _run_process_pdf_job(job_id: str, doc_id: str, pdf_paths: list[str]):
             )
 
             _update_job(job_id, step="build_index", message="Building embeddings/index")
+            from pdf_utils import get_vector_store
             tmp_dir = os.path.join(_DATA_ROOT, f".faiss_tmp_{job_id}")
             if os.path.exists(tmp_dir):
                 shutil.rmtree(tmp_dir, ignore_errors=True)

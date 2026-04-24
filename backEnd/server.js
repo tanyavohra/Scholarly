@@ -306,10 +306,10 @@ let PYTHON_BASE_URL = (process.env.PYTHON_BASE_URL || DEFAULT_PYTHON_BASE_URL).r
 const PYTHON_PROCESS_PDF_TIMEOUT_MS = parseInt(process.env.PYTHON_PROCESS_PDF_TIMEOUT_MS || "300000", 10); // 5 min
 const PYTHON_PROCESS_PDF_RETRIES = parseInt(process.env.PYTHON_PROCESS_PDF_RETRIES || "1", 10);
 const PYTHON_PROCESS_PDF_STATUS_TIMEOUT_MS = parseInt(
-  process.env.PYTHON_PROCESS_PDF_STATUS_TIMEOUT_MS || "30000",
+  process.env.PYTHON_PROCESS_PDF_STATUS_TIMEOUT_MS || "60000",
   10,
-); // 30s
-const PYTHON_PROCESS_PDF_STATUS_RETRIES = parseInt(process.env.PYTHON_PROCESS_PDF_STATUS_RETRIES || "2", 10);
+); // 60s
+const PYTHON_PROCESS_PDF_STATUS_RETRIES = parseInt(process.env.PYTHON_PROCESS_PDF_STATUS_RETRIES || "4", 10);
 const PYTHON_PROCESS_PDF_ASYNC =
   process.env.PYTHON_PROCESS_PDF_ASYNC != null
     ? ["1", "true", "yes", "on"].includes(String(process.env.PYTHON_PROCESS_PDF_ASYNC).toLowerCase())
