@@ -42,10 +42,6 @@ def _get_embeddings():
     return _EMBEDDINGS
 
 
-def _truthy(value: str) -> bool:
-    return (value or "").strip().lower() in ("1", "true", "yes", "y", "on")
-
-
 def _get_llm():
     global _LLM
     if _LLM is None:
@@ -56,7 +52,6 @@ def _get_llm():
         # This avoids downloading/initializing large models inside the Render container.
         use_hf_hub = backend in ("hf_hub", "huggingface_hub", "hf_api") or (backend == "auto" and bool(hf_token))
         if use_hf_hub:
-            strict = _truthy(os.getenv("QA_BACKEND_STRICT", "0"))
             try:
                 from langchain_community.llms import HuggingFaceHub
             except Exception:  # pragma: no cover
@@ -85,8 +80,6 @@ def _get_llm():
                 _LLM = HuggingFaceHub(repo_id=repo_id, task=task, model_kwargs=model_kwargs)
                 return _LLM
             except Exception as e:
-                if strict:
-                    raise
                 # Fall back to local pipeline if hosted inference is unavailable/misconfigured.
                 print(f"WARNING: QA_BACKEND=hf_hub failed ({e}); falling back to local transformers.", flush=True)
 
