@@ -11,7 +11,7 @@ import time
 import uuid
 import urllib.parse
 import urllib.request
-import zipfile
+from io import BytesIO 
 from dotenv import load_dotenv
 
 from pymongo import MongoClient
@@ -126,14 +126,18 @@ def _mongo_db():
             _GRIDFS = gridfs.GridFS(db, collection=PDF_GRIDFS_BUCKET)
             globals()["_MONGO_LAST_ERROR"] = None
 
-            # Best-effort indexes (safe to ignore failures on free tiers).
-            try:
-                db["pdf_jobs"].create_index("job_id", unique=True)
-                db["pdf_jobs"].create_index("doc_id")
-                db["pdf_state"].create_index("key", unique=True)
-                db[f"{PDF_GRIDFS_BUCKET}.files"].create_index([("metadata.doc_id", 1), ("metadata.kind", 1)])
-            except Exception:
-                pass
+            # Best-effort indexes (safe to ignore failures on free tiers). 
+            try: 
+                db["pdf_jobs"].create_index("job_id", unique=True) 
+                db["pdf_jobs"].create_index("doc_id") 
+                db["pdf_state"].create_index("key", unique=True) 
+                db["pdf_docs"].create_index("doc_id", unique=True) 
+                db["pdf_chunks"].create_index([("doc_id", 1), ("idx", 1)]) 
+                db[f"{PDF_GRIDFS_BUCKET}.files"].create_index( 
+                    [("metadata.doc_id", 1), ("metadata.kind", 1), ("metadata.ordinal", 1)] 
+                ) 
+            except Exception: 
+                pass 
 
             return _MONGO_DB
         except Exception as e:
@@ -161,25 +165,14 @@ def _grid_fs():
     return _GRIDFS if USE_MONGO else None
 
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FAISS_DIR = os.getenv("FAISS_DIR", "faiss_index")  # folder where index is saved
-if not os.path.isabs(FAISS_DIR):
-    FAISS_DIR = os.path.join(_BASE_DIR, FAISS_DIR)
-os.makedirs(FAISS_DIR, exist_ok=True)
-
-_DATA_ROOT = os.path.dirname(FAISS_DIR) or _BASE_DIR
-JOBS_DIR = os.getenv("JOBS_DIR", os.path.join(_DATA_ROOT, "jobs"))
-os.makedirs(JOBS_DIR, exist_ok=True)
-
-FAISS_CACHE_DIR = os.getenv("FAISS_CACHE_DIR", os.path.join("/tmp", "brainlink_faiss_cache"))
-try:
-    os.makedirs(FAISS_CACHE_DIR, exist_ok=True)
-except Exception:
-    pass
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
+_DATA_ROOT = os.getenv("DATA_ROOT", "").strip() or _BASE_DIR 
+JOBS_DIR = os.getenv("JOBS_DIR", os.path.join(_DATA_ROOT, "jobs")) 
+os.makedirs(JOBS_DIR, exist_ok=True) 
 
 _JOBS = {}
 _JOBS_LOCK = threading.Lock()
-ACTIVE_JOB_PATH = os.path.join(JOBS_DIR, "active_job.json")
+ACTIVE_JOB_PATH = os.path.join(JOBS_DIR, "active_job.json") 
 
 PROCESS_PDF_QUEUE_POLL_SECS = float(os.getenv("PROCESS_PDF_QUEUE_POLL_SECS", "2"))
 PROCESS_PDF_QUEUE_HEARTBEAT_SECS = int(os.getenv("PROCESS_PDF_QUEUE_HEARTBEAT_SECS", "15"))
@@ -622,7 +615,7 @@ def _start_background_job(job_id: str, target, args):
         pass
 
 
-def _wait_for_slot_and_start_job(job_id: str, runner, runner_args):
+def _wait_for_slot_and_start_job(job_id: str, runner, runner_args): 
     started_at = time.time()
     next_heartbeat = 0.0
 
@@ -668,11 +661,77 @@ def _wait_for_slot_and_start_job(job_id: str, runner, runner_args):
                 pass
             next_heartbeat = now + max(5, PROCESS_PDF_QUEUE_HEARTBEAT_SECS)
 
-        time.sleep(max(0.5, PROCESS_PDF_QUEUE_POLL_SECS))
+        time.sleep(max(0.5, PROCESS_PDF_QUEUE_POLL_SECS)) 
+ 
+ 
+_QUEUE_POLLER_STARTED = False 
+ 
+ 
+def _queue_poller_loop(): 
+    while True: 
+        try: 
+            if not USE_MONGO: 
+                time.sleep(2.0) 
+                continue 
+ 
+            # If something is actively running, let it finish. 
+            if _get_active_job(): 
+                time.sleep(1.0) 
+                continue 
+ 
+            col = _jobs_col() 
+            if col is None: 
+                time.sleep(2.0) 
+                continue 
+ 
+            job = col.find_one({"status": "queued"}, {"_id": 0}, sort=[("created_at", 1)]) 
+            if not job: 
+                time.sleep(1.0) 
+                continue 
+ 
+            job_id = str(job.get("job_id") or "").strip() 
+            doc_id = str(job.get("doc_id") or "").strip() 
+            if not job_id or not doc_id: 
+                time.sleep(1.0) 
+                continue 
+ 
+            if not _set_active_job_id(job_id): 
+                time.sleep(1.0) 
+                continue 
+ 
+            try: 
+                _update_job(job_id, step="start_worker", message="Starting PDF processing") 
+                _start_background_job(job_id, _run_process_pdf_job, (job_id, doc_id)) 
+            except Exception as e: 
+                _clear_active_job_id(job_id) 
+                try: 
+                    _update_job(job_id, status="failed", step="start_worker", error=str(e)) 
+                except Exception: 
+                    pass 
+ 
+            time.sleep(0.2) 
+        except Exception as e: 
+            try: 
+                print(json.dumps({"type": "queue_poller_error", "error": str(e)}), flush=True) 
+            except Exception: 
+                pass 
+            time.sleep(2.0) 
+ 
+ 
+def _start_queue_poller(): 
+    global _QUEUE_POLLER_STARTED 
+    if _QUEUE_POLLER_STARTED: 
+        return 
+    _QUEUE_POLLER_STARTED = True 
+    t = threading.Thread(target=_queue_poller_loop, daemon=True) 
+    t.start() 
+ 
+ 
+_start_queue_poller() 
 
 
-@app.get("/healthz")
-def healthz():
+@app.get("/healthz") 
+def healthz(): 
     db = _mongo_db() if USE_MONGO else _MONGO_DB
     active = _get_active_job()
     resp = {
@@ -740,7 +799,7 @@ def _set_latest_doc_id(doc_id: str) -> None:
         return
 
 
-def _get_latest_doc_id() -> str | None:
+def _get_latest_doc_id() -> str | None: 
     col = _state_col()
     if col is None:
         return None
@@ -748,30 +807,30 @@ def _get_latest_doc_id() -> str | None:
         doc = col.find_one({"key": "latest_doc_id"}, {"_id": 0})
         val = str((doc or {}).get("doc_id") or "").strip()
         return val or None
-    except Exception:
-        return None
+    except Exception: 
+        return None 
 
 
-def _gridfs_find_latest_doc_index(doc_id: str):
-    fs = _grid_fs()
-    if fs is None:
+def _docs_col():
+    db = _mongo_db()
+    if db is None:
         return None
-    try:
-        cur = fs.find({"metadata.kind": "faiss", "metadata.doc_id": doc_id}).sort("uploadDate", -1).limit(1)
-        for f in cur:
-            return f
-        return None
-    except Exception as e:
-        print(json.dumps({"type": "gridfs_find_error", "error": str(e)}), flush=True)
-        return None
+    return db["pdf_docs"]
 
 
-def _gridfs_delete_doc_indexes(doc_id: str) -> None:
+def _chunks_col():
+    db = _mongo_db()
+    if db is None:
+        return None
+    return db["pdf_chunks"]
+
+
+def _gridfs_delete_doc_pdfs(doc_id: str) -> None:
     fs = _grid_fs()
     if fs is None:
         return
     try:
-        for f in fs.find({"metadata.kind": "faiss", "metadata.doc_id": doc_id}):
+        for f in fs.find({"metadata.kind": "pdf", "metadata.doc_id": doc_id}):
             try:
                 fs.delete(f._id)
             except Exception:
@@ -780,244 +839,176 @@ def _gridfs_delete_doc_indexes(doc_id: str) -> None:
         return
 
 
-def _zip_dir(src_dir: str, dst_zip_path: str) -> None:
-    with zipfile.ZipFile(dst_zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for root, _dirs, files in os.walk(src_dir):
-            for name in files:
-                abs_path = os.path.join(root, name)
-                rel_path = os.path.relpath(abs_path, src_dir)
-                zf.write(abs_path, rel_path)
-
-
-def _gridfs_store_doc_index(doc_id: str, index_dir: str) -> dict | None:
+def _gridfs_store_doc_pdf(doc_id: str, file_obj, *, filename: str, content_type: str, ordinal: int) -> str | None:
     fs = _grid_fs()
     if fs is None:
         return None
-
-    zip_path = os.path.join(_DATA_ROOT, f".faiss_{doc_id}.zip")
     try:
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-    except Exception:
-        pass
-
-    try:
-        _zip_dir(index_dir, zip_path)
-        _gridfs_delete_doc_indexes(doc_id)
-        with open(zip_path, "rb") as f:
-            file_id = fs.put(
-                f,
-                filename=f"faiss-{doc_id}.zip",
-                metadata={"kind": "faiss", "doc_id": doc_id},
-                content_type="application/zip",
-            )
-        return {"file_id": str(file_id), "filename": f"faiss-{doc_id}.zip"}
-    except Exception as e:
-        print(json.dumps({"type": "gridfs_store_error", "doc_id": doc_id, "error": str(e)}), flush=True)
-        return None
-    finally:
         try:
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
+            file_obj.seek(0)
         except Exception:
             pass
-
-
-def _ensure_doc_index_local(doc_id: str) -> str | None:
-    if not doc_id:
+        file_id = fs.put(
+            file_obj,
+            filename=filename or f"doc-{doc_id}.pdf",
+            metadata={"kind": "pdf", "doc_id": doc_id, "ordinal": int(ordinal)},
+            contentType=content_type or "application/pdf",
+        )
+        return str(file_id)
+    except Exception as e:
+        print(json.dumps({"type": "gridfs_store_pdf_error", "doc_id": doc_id, "error": str(e)}), flush=True)
         return None
 
-    dest_dir = os.path.join(FAISS_CACHE_DIR, doc_id)
-    index_file = os.path.join(dest_dir, "index.faiss")
-    if os.path.exists(index_file):
-        return dest_dir
 
+def _gridfs_open_doc_pdfs(doc_id: str):
     fs = _grid_fs()
     if fs is None:
-        return None
-
-    grid_out = _gridfs_find_latest_doc_index(doc_id)
-    if grid_out is None:
-        return None
-
-    tmp_zip = os.path.join(FAISS_CACHE_DIR, f".dl_{doc_id}.zip")
+        return []
     try:
-        os.makedirs(dest_dir, exist_ok=True)
-        with open(tmp_zip, "wb") as out:
-            while True:
-                chunk = grid_out.read(1024 * 1024)
-                if not chunk:
-                    break
-                out.write(chunk)
-
-        # Extract into a clean dir.
-        for name in os.listdir(dest_dir):
-            try:
-                p = os.path.join(dest_dir, name)
-                if os.path.isdir(p):
-                    shutil.rmtree(p, ignore_errors=True)
-                else:
-                    os.remove(p)
-            except Exception:
-                pass
-
-        with zipfile.ZipFile(tmp_zip, "r") as zf:
-            zf.extractall(dest_dir)
-
-        if os.path.exists(index_file):
-            return dest_dir
-        return None
-    except Exception as e:
-        print(json.dumps({"type": "gridfs_extract_error", "doc_id": doc_id, "error": str(e)}), flush=True)
-        return None
-    finally:
-        try:
-            if os.path.exists(tmp_zip):
-                os.remove(tmp_zip)
-        except Exception:
-            pass
-
-
-def _run_process_pdf_job(job_id: str, doc_id: str, pdf_paths: list[str]):
-    try:
-        _update_job(
-            job_id,
-            status="running",
-            step="extract_text",
-            message="Extracting text",
-            pid=os.getpid(),
-            doc_id=doc_id,
+        cur = (
+            fs.find({"metadata.kind": "pdf", "metadata.doc_id": doc_id})
+            .sort("metadata.ordinal", 1)
+            .sort("uploadDate", 1)
         )
-
-        # Import chunking helpers first (lightweight). Embedding/FAISS imports are heavier,
-        # so we load them only after updating the job step to "build_index".
-        from pdf_utils import iter_text_chunks_from_pdfs
-
-        streams = []
-        try:
-            for p in pdf_paths:
-                streams.append(open(p, "rb"))
-
-            _update_job(job_id, step="chunk_text", message="Chunking text")
-            chunk_size = int(os.getenv("CHUNK_SIZE", "1000"))
-            chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "200"))
-            text_chunks = iter_text_chunks_from_pdfs(
-                streams, chunk_size=chunk_size, chunk_overlap=chunk_overlap
-            )
-
-            _update_job(job_id, step="build_index", message="Building embeddings/index")
-            from pdf_utils import get_vector_store
-            tmp_dir = os.path.join(_DATA_ROOT, f".faiss_tmp_{job_id}")
-            if os.path.exists(tmp_dir):
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            get_vector_store(text_chunks, store_dir=tmp_dir)
-        finally:
-            for s in streams:
-                try:
-                    s.close()
-                except Exception:
-                    pass
-
-            # Best-effort cleanup of uploaded PDFs (keeps only status.json).
-            for p in pdf_paths:
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-
-        _update_job(job_id, step="store_index", message="Storing index")
-        index_ok = os.path.exists(os.path.join(tmp_dir, "index.faiss"))
-        stored = None
-        if index_ok and USE_MONGO:
-            stored = _gridfs_store_doc_index(doc_id, tmp_dir)
-
-        _update_job(job_id, step="swap_index", message="Finalizing index")
-        try:
-            if os.path.exists(FAISS_DIR):
-                shutil.rmtree(FAISS_DIR, ignore_errors=True)
-            os.rename(tmp_dir, FAISS_DIR)
-        except Exception:
-            pass
-
-        # Cache by doc_id for this runtime (so ask_question doesn't immediately re-download).
-        try:
-            doc_cache_dir = os.path.join(FAISS_CACHE_DIR, doc_id)
-            if os.path.exists(doc_cache_dir):
-                shutil.rmtree(doc_cache_dir, ignore_errors=True)
-            if os.path.exists(FAISS_DIR):
-                shutil.copytree(FAISS_DIR, doc_cache_dir, dirs_exist_ok=True)
-        except Exception:
-            pass
-
-        _update_job(
-            job_id,
-            status="done",
-            step="done",
-            index_built=bool(index_ok),
-            message="PDF processed successfully",
-            faiss_dir=FAISS_DIR,
-            doc_id=doc_id,
-            index_stored=bool(stored),
-            index_storage=stored,
-            pid=os.getpid(),
-        )
-        if index_ok:
-            _set_latest_doc_id(doc_id)
+        return list(cur)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        try:
-            _update_job(job_id, status="failed", step="failed", error=str(e), pid=os.getpid())
-        except Exception:
-            pass
-    finally:
-        _clear_active_job_id(job_id)
+        print(json.dumps({"type": "gridfs_open_pdf_error", "doc_id": doc_id, "error": str(e)}), flush=True)
+        return []
 
 
-def _run_process_pdf_job_from_urls(job_id: str, doc_id: str, source_urls: list[str]):
-    try:
-        job_dir = _job_dir(job_id)
-        os.makedirs(job_dir, exist_ok=True)
+def _run_process_pdf_job(job_id: str, doc_id: str): 
+    try: 
+        if not USE_MONGO: 
+            raise RuntimeError("MONGO_URI is required for PDF processing (durable jobs + storage).") 
+ 
+        fs = _grid_fs() 
+        docs_col = _docs_col() 
+        chunks_col = _chunks_col() 
+        if fs is None or docs_col is None or chunks_col is None: 
+            raise RuntimeError("Mongo/GridFS not initialized. Check MONGO_URI/PDF_GRIDFS_BUCKET.") 
+ 
+        _update_job( 
+            job_id, 
+            status="running", 
+            step="load_pdf", 
+            message="Loading PDF(s)", 
+            worker_pid=os.getpid(), 
+            doc_id=doc_id, 
+        ) 
+ 
+        job = _load_persisted_job(job_id) or {} 
+        source_urls = job.get("source_urls") or [] 
+        if source_urls: 
+            _update_job(job_id, step="download_pdf", message="Downloading PDF(s)") 
+            max_bytes = app.config.get("MAX_CONTENT_LENGTH") 
+            if not max_bytes: 
+                try: 
+                    max_bytes = int(os.getenv("MAX_UPLOAD_BYTES") or "0") or None 
+                except ValueError: 
+                    max_bytes = None 
+ 
+            for i, url in enumerate(source_urls): 
+                tmp_path = os.path.join(_DATA_ROOT, f".dl_{job_id}_{i}.pdf") 
+                _download_url_to_path(url, tmp_path, max_bytes=max_bytes) 
+                with open(tmp_path, "rb") as f: 
+                    _gridfs_store_doc_pdf(doc_id, f, filename=f"download_{i}.pdf", content_type="application/pdf", ordinal=i) 
+                try: 
+                    os.remove(tmp_path) 
+                except Exception: 
+                    pass 
+ 
+        pdf_gridouts = _gridfs_open_doc_pdfs(doc_id) 
+        if not pdf_gridouts: 
+            raise RuntimeError("No PDF found for this job/doc_id. Re-upload and try again.") 
+ 
+        now = int(time.time()) 
+        docs_col.update_one( 
+            {"doc_id": doc_id}, 
+            {"$set": {"doc_id": doc_id, "status": "processing", "updated_at": now}, "$setOnInsert": {"created_at": now}}, 
+            upsert=True, 
+        ) 
+        try: 
+            chunks_col.delete_many({"doc_id": doc_id}) 
+        except Exception: 
+            pass 
+ 
+        _update_job(job_id, step="extract_text", message="Extracting + chunking text") 
+        from pdf_utils import coerce_to_seekable, iter_text_chunks_from_pdf_streams 
+ 
+        try: 
+            max_chunks = int(os.getenv("MAX_CHUNKS") or "0") or None 
+        except ValueError: 
+            max_chunks = None 
+        chunk_size = int(os.getenv("CHUNK_SIZE", "1000")) 
+        chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "200")) 
+ 
+        pdf_streams = [] 
+        for grid_out in pdf_gridouts: 
+            # Materialize into memory to ensure seekable reads. 25MB PDFs are OK on this pipeline 
+            # because we no longer load large ML models / FAISS. 
+            pdf_streams.append(coerce_to_seekable(BytesIO(grid_out.read()))) 
+ 
+        batch = [] 
+        idx = 0 
+        batch_size = 50 
+        for chunk in iter_text_chunks_from_pdf_streams( 
+            pdf_streams, chunk_size=chunk_size, chunk_overlap=chunk_overlap, max_chunks=max_chunks 
+        ): 
+            if not (chunk or "").strip(): 
+                continue 
+            batch.append({"doc_id": doc_id, "idx": idx, "text": chunk}) 
+            idx += 1 
+            if len(batch) >= batch_size: 
+                chunks_col.insert_many(batch, ordered=False) 
+                batch = [] 
+                if idx % 50 == 0: 
+                    _update_job(job_id, step="store_chunks", message=f"Stored {idx} chunks") 
+ 
+        if batch: 
+            chunks_col.insert_many(batch, ordered=False) 
+ 
+        docs_col.update_one( 
+            {"doc_id": doc_id}, 
+            {"$set": {"status": "ready", "chunk_count": idx, "updated_at": int(time.time())}}, 
+            upsert=True, 
+        ) 
+        _set_latest_doc_id(doc_id) 
+ 
+        _update_job( 
+            job_id, 
+            status="done", 
+            step="done", 
+            index_built=True, 
+            message="PDF processed successfully", 
+            doc_id=doc_id, 
+            chunk_count=idx, 
+            worker_pid=os.getpid(), 
+        ) 
+    except Exception as e: 
+        import traceback 
+        traceback.print_exc() 
+        try: 
+            _update_job(job_id, status="failed", step="failed", error=str(e), worker_pid=os.getpid(), doc_id=doc_id) 
+        except Exception: 
+            pass 
+    finally: 
+        _clear_active_job_id(job_id) 
 
-        max_bytes = app.config.get("MAX_CONTENT_LENGTH")
-        if not max_bytes:
-            try:
-                max_bytes = int(os.getenv("MAX_UPLOAD_BYTES") or "0") or None
-            except ValueError:
-                max_bytes = None
 
-        _update_job(
-            job_id,
-            status="running",
-            step="download_pdf",
-            message="Downloading PDF",
-            pid=os.getpid(),
-            doc_id=doc_id,
-        )
-        pdf_paths = []
-        for i, url in enumerate(source_urls or []):
-            dst = os.path.join(job_dir, f"download_{i}.pdf")
-            _download_url_to_path(url, dst, max_bytes=max_bytes)
-            pdf_paths.append(dst)
+def _run_process_pdf_job_from_urls(job_id: str, doc_id: str, source_urls: list[str]): 
+    # Back-compat: older job records used a separate URL runner. 
+    # New pipeline stores `source_urls` on the job and `_run_process_pdf_job` handles downloading. 
+    try: 
+        _update_job(job_id, source_urls=source_urls or []) 
+        _run_process_pdf_job(job_id, doc_id) 
+    finally: 
+        job = _load_persisted_job(job_id) or {} 
+        if job.get("status") not in ("queued", "running"): 
+            _clear_active_job_id(job_id) 
 
-        _run_process_pdf_job(job_id, doc_id, pdf_paths)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        try:
-            _update_job(job_id, status="failed", step="download_pdf", error=str(e))
-        except Exception:
-            pass
-    finally:
-        # If download fails early, make sure we release the "only one active job" lock.
-        # (If processing continues via _run_process_pdf_job, that function will clear it instead.)
-        job = _load_persisted_job(job_id) or {}
-        if job.get("status") not in ("queued", "running"):
-            _clear_active_job_id(job_id)
-
-@app.route("/process_pdf", methods=["POST"])
-def process_pdf():
-    pdf_files = request.files.getlist("pdfFiles")
+@app.route("/process_pdf", methods=["POST"]) 
+def process_pdf(): 
+    pdf_files = request.files.getlist("pdfFiles") 
 
     source_urls = []
     if not pdf_files:
@@ -1034,8 +1025,11 @@ def process_pdf():
         if invalid:
             return jsonify({"error": "Invalid source_url", "invalid": invalid[:3]}), 400
 
-    if not pdf_files and not source_urls:
-        return jsonify({"error": "No PDF provided", "hint": "Send multipart/form-data field 'pdfFiles' or JSON { source_url }"}), 400
+    if not pdf_files and not source_urls: 
+        return jsonify({"error": "No PDF provided", "hint": "Send multipart/form-data field 'pdfFiles' or JSON { source_url }"}), 400 
+ 
+    if not USE_MONGO: 
+        return jsonify({"error": "MONGO_URI is required for reliable PDF processing on hosted deployments."}), 500 
 
     async_qp = (request.args.get("async") or "").strip().lower()
     prefer = (request.headers.get("Prefer") or "").lower()
@@ -1043,180 +1037,117 @@ def process_pdf():
     force_sync = async_qp in ("0", "false", "no", "off")
     use_async = (force_async or PROCESS_PDF_ASYNC_DEFAULT) and not force_sync
 
-    if use_async:
-        job_id = uuid.uuid4().hex
-        doc_id = uuid.uuid4().hex
-        created_at = int(time.time())
-        job = {
-            "job_id": job_id,
-            "doc_id": doc_id,
-            "status": "queued",
-            "step": "queued",
-            "created_at": created_at,
-            "updated_at": created_at,
-            "index_built": False,
-            "request_id": getattr(g, "request_id", None),
-        }
-        with _JOBS_LOCK:
-            _JOBS[job_id] = job
-        _persist_job(job)
+    if use_async: 
+        job_id = uuid.uuid4().hex 
+        doc_id = uuid.uuid4().hex 
+        created_at = int(time.time()) 
+        job = { 
+            "job_id": job_id, 
+            "doc_id": doc_id, 
+            "status": "queued", 
+            "step": "queued", 
+            "created_at": created_at, 
+            "updated_at": created_at, 
+            "index_built": False, 
+            "request_id": getattr(g, "request_id", None), 
+        } 
+        with _JOBS_LOCK: 
+            _JOBS[job_id] = job 
+        _persist_job(job) 
+ 
+        # Store uploaded PDFs in GridFS immediately so a Render restart doesn't lose inputs. 
+        if pdf_files: 
+            stored_ids = [] 
+            for i, file in enumerate(pdf_files): 
+                fid = _gridfs_store_doc_pdf( 
+                    doc_id, 
+                    file.stream, 
+                    filename=file.filename or f"upload_{i}.pdf", 
+                    content_type=file.mimetype or "application/pdf", 
+                    ordinal=i, 
+                ) 
+                if fid: 
+                    stored_ids.append(fid) 
+            _update_job(job_id, pdf_gridfs_ids=stored_ids, pdf_count=len(stored_ids)) 
+        elif source_urls: 
+            _update_job(job_id, source_urls=source_urls, message="Queued URL download") 
 
-        job_dir = _job_dir(job_id)
-        os.makedirs(job_dir, exist_ok=True)
-
-        runner = None
-        runner_args = None
-
-        if pdf_files:
-            pdf_paths = []
-            for i, file in enumerate(pdf_files):
-                dst = os.path.join(job_dir, f"upload_{i}.pdf")
-                file.save(dst)
-                pdf_paths.append(dst)
-
-            runner = _run_process_pdf_job
-            runner_args = (job_id, doc_id, pdf_paths)
-        else:
-            _update_job(job_id, source_urls=source_urls, message="Queued URL download")
-            runner = _run_process_pdf_job_from_urls
-            runner_args = (job_id, doc_id, source_urls)
+        os.makedirs(_job_dir(job_id), exist_ok=True) 
+        runner = _run_process_pdf_job 
+        runner_args = (job_id, doc_id) 
 
         # Try to start immediately; otherwise enqueue and respond with the job id.
-        if _set_active_job_id(job_id):
-            try:
-                _start_background_job(job_id, runner, runner_args)
-            except Exception as e:
-                _clear_active_job_id(job_id)
-                _update_job(job_id, status="failed", step="start_worker", error=str(e))
-                return jsonify({"error": "Failed to start background worker", "job_id": job_id}), 500
-        else:
-            _update_job(job_id, message="Queued behind another active job")
-            threading.Thread(
-                target=_wait_for_slot_and_start_job,
-                args=(job_id, runner, runner_args),
-                daemon=True,
-            ).start()
-        return jsonify({"job_id": job_id, "doc_id": doc_id, "status": "queued"}), 202
+        if _set_active_job_id(job_id): 
+            try: 
+                _start_background_job(job_id, runner, runner_args) 
+            except Exception as e: 
+                _clear_active_job_id(job_id) 
+                _update_job(job_id, status="failed", step="start_worker", error=str(e)) 
+                return jsonify({"error": "Failed to start background worker", "job_id": job_id}), 500 
+        else: 
+            _update_job(job_id, message="Queued behind another active job") 
+        return jsonify({"job_id": job_id, "doc_id": doc_id, "status": "queued"}), 202 
 
-    # Synchronous path: guard against corrupting FAISS_DIR while another job is running.
-    active = _get_active_job()
-    if active:
-        return jsonify({"error": "A PDF is already processing", "job_id": active.get("job_id"), "doc_id": active.get("doc_id")}), 409
-
-    doc_id = uuid.uuid4().hex
-    try:
-        from pdf_utils import iter_text_chunks_from_pdfs, get_vector_store
-
-        # 1️⃣ Extract text from PDFs
-
-        # 2️⃣ Split text into chunks
-        streams = []
-        tmp_dir = None
-        sources = pdf_files
-        if source_urls:
-            tmp_dir = os.path.join(_DATA_ROOT, f".url_tmp_{uuid.uuid4().hex}")
-            os.makedirs(tmp_dir, exist_ok=True)
-
-            max_bytes = app.config.get("MAX_CONTENT_LENGTH")
-            if not max_bytes:
-                try:
-                    max_bytes = int(os.getenv("MAX_UPLOAD_BYTES") or "0") or None
-                except ValueError:
-                    max_bytes = None
-
-            pdf_paths = []
-            for i, url in enumerate(source_urls):
-                dst = os.path.join(tmp_dir, f"download_{i}.pdf")
-                _download_url_to_path(url, dst, max_bytes=max_bytes)
-                pdf_paths.append(dst)
-
-            for p in pdf_paths:
-                streams.append(open(p, "rb"))
-            sources = streams
-
-        chunk_size = int(os.getenv("CHUNK_SIZE", "1000"))
-        chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "200"))
-        text_chunks = iter_text_chunks_from_pdfs(
-            sources, chunk_size=chunk_size, chunk_overlap=chunk_overlap
-        )
-
-        # 3️⃣ Create FAISS index (local embeddings)
-        get_vector_store(text_chunks, store_dir=FAISS_DIR)
-
-        for s in streams:
-            try:
-                s.close()
-            except Exception:
-                pass
-        if tmp_dir and os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-
-        index_ok = os.path.exists(os.path.join(FAISS_DIR, "index.faiss"))
-        stored = None
-        if index_ok and USE_MONGO:
-            stored = _gridfs_store_doc_index(doc_id, FAISS_DIR)
-            _set_latest_doc_id(doc_id)
-        print("PDF processed successfully.")
-        return jsonify(
-            {
-                "message": "PDF processed successfully",
-                "faiss_dir": FAISS_DIR,
-                "index_built": bool(index_ok),
-                "doc_id": doc_id,
-                "index_stored": bool(stored),
-                "index_storage": stored,
-            }
-        ), 200
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print("Error in /process_pdf:", e)
-        try:
-            for s in streams:
-                try:
-                    s.close()
-                except Exception:
-                    pass
-            if tmp_dir and os.path.exists(tmp_dir):
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-        except Exception:
-            pass
-        return jsonify({"error": str(e)}), 500
+    # Default to async mode (Node expects this in production). 
+    return jsonify({"error": "Synchronous processing is disabled; call /process_pdf?async=1."}), 400 
 
 
-@app.route("/ask_question", methods=["POST"])
-def ask_question_route():
-    try:
-        data = request.get_json(force=True) or {}
-        question = str(data.get("question") or "").strip()
-        print("Received question:", question)
-        if not question:
-            return jsonify({"error": "Missing question"}), 400
-
-        doc_id = str(data.get("doc_id") or data.get("docId") or "").strip()
-        if not doc_id:
-            doc_id = _get_latest_doc_id() or ""
-
-        index_path = None
-        if doc_id and USE_MONGO:
-            index_path = _ensure_doc_index_local(doc_id)
-
-        if not index_path and os.path.isdir(FAISS_DIR) and os.path.exists(os.path.join(FAISS_DIR, "index.faiss")):
-            index_path = FAISS_DIR
-
-        if not index_path:
-            return jsonify({"error": "Index not found. Process the PDF again.", "doc_id": doc_id or None}), 404
-        from pdf_utils import answer_question
-        response = answer_question(question, index_path=index_path)
-        out_text = response.get("output_text") if isinstance(response, dict) else str(response)
-        print("Answer generated:", out_text[:200])
-        return jsonify({"response": out_text, "doc_id": doc_id or None}), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print("❌ Error in /ask_question:", e)
-        return jsonify({"error": str(e)}), 500
+@app.route("/ask_question", methods=["POST"]) 
+def ask_question_route(): 
+    try: 
+        data = request.get_json(force=True) or {} 
+        question = str(data.get("question") or "").strip() 
+        print("Received question:", question) 
+        if not question: 
+            return jsonify({"error": "Missing question"}), 400 
+ 
+        if not USE_MONGO: 
+            return jsonify({"error": "MONGO_URI is required for PDF QA."}), 500 
+ 
+        doc_id = str(data.get("doc_id") or data.get("docId") or "").strip() 
+        if not doc_id: 
+            doc_id = _get_latest_doc_id() or "" 
+        if not doc_id: 
+            return jsonify({"error": "Missing doc_id. Process a PDF first."}), 400 
+ 
+        docs_col = _docs_col() 
+        chunks_col = _chunks_col() 
+        if docs_col is None or chunks_col is None: 
+            return jsonify({"error": "Mongo is not initialized"}), 500 
+ 
+        doc = docs_col.find_one({"doc_id": doc_id}, {"_id": 0}) or {} 
+        if (doc.get("status") or "").lower() != "ready": 
+            return jsonify({"error": "Document is not ready", "doc_id": doc_id, "status": doc.get("status")}), 409 
+ 
+        try: 
+            max_query_chunks = int(os.getenv("MAX_QUERY_CHUNKS") or "1200") 
+        except ValueError: 
+            max_query_chunks = 1200 
+        cur = chunks_col.find({"doc_id": doc_id}, {"_id": 0, "text": 1}).sort("idx", 1).limit(max(1, max_query_chunks)) 
+        chunks = [str(d.get("text") or "") for d in cur] 
+        if not chunks: 
+            return jsonify({"error": "No chunks found for doc_id", "doc_id": doc_id}), 404 
+ 
+        from pdf_utils import bm25_top_k, build_context, generate_answer 
+ 
+        try: 
+            top_k = int(os.getenv("RETRIEVER_TOP_K") or "6") 
+        except ValueError: 
+            top_k = 6 
+        indices = bm25_top_k(chunks, question, k=top_k) 
+        try: 
+            ctx_max = int(os.getenv("QA_CONTEXT_MAX_CHARS") or "8000") 
+        except ValueError: 
+            ctx_max = 8000 
+        context = build_context(chunks, indices, max_chars=ctx_max) 
+        out_text = generate_answer(question, context) 
+        print("Answer generated:", (out_text or "")[:200]) 
+        return jsonify({"response": out_text, "doc_id": doc_id}), 200 
+    except Exception as e: 
+        import traceback 
+        traceback.print_exc() 
+        print("❌ Error in /ask_question:", e) 
+        return jsonify({"error": str(e)}), 500 
 
 if __name__ == "__main__":
     # Run with python app.py (good for dev). For production, use gunicorn / uvicorn + reverse proxy.

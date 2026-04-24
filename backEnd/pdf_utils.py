@@ -1,149 +1,46 @@
+import math
 import os
-import warnings
+import re
+from io import BytesIO
+
 from PyPDF2 import PdfReader
 
-# LangChain moved text splitters into a separate package in newer versions.
-try:
-    from langchain_text_splitters import CharacterTextSplitter
-except ImportError:  # pragma: no cover
-    from langchain.text_splitter import CharacterTextSplitter
 
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-_EMBEDDINGS = None
-_LLM = None
-_VECTOR_STORE = None
-_VECTOR_STORE_META = None
+def _truthy(value: str) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-def _get_embeddings():
-    global _EMBEDDINGS
-    if _EMBEDDINGS is None:
-        # Import lazily to avoid paying torch/sentence-transformers import cost on module import.
-        from langchain_huggingface import HuggingFaceEmbeddings
-
-        model_name = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-        encode_kwargs = {}
-        batch_size = os.getenv("EMBEDDING_MODEL_BATCH_SIZE")
-        if batch_size:
-            try:
-                encode_kwargs["batch_size"] = int(batch_size)
-            except ValueError:
-                pass
-        _EMBEDDINGS = HuggingFaceEmbeddings(model_name=model_name, encode_kwargs=encode_kwargs)
-    return _EMBEDDINGS
+_WORD_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 
 
-def _get_llm():
-    global _LLM
-    if _LLM is None:
-        backend = (os.getenv("QA_BACKEND") or "auto").strip().lower()
-        hf_token = (os.getenv("HUGGINGFACEHUB_API_TOKEN") or "").strip()
-
-        # Prefer the hosted Hugging Face Inference API when a token is present.
-        # This avoids downloading/initializing large models inside the Render container.
-        force_hf_hub = backend in ("hf_hub", "huggingface_hub", "hf_api")
-        use_hf_hub = force_hf_hub or (backend == "auto" and bool(hf_token))
-
-        if force_hf_hub and not hf_token:
-            raise ValueError("QA_BACKEND=hf_hub requires HUGGINGFACEHUB_API_TOKEN to be set.")
-
-        if use_hf_hub:
-            try:
-                from langchain_community.llms import HuggingFaceHub
-            except Exception:  # pragma: no cover
-                from langchain.llms import HuggingFaceHub
-
-            repo_id = os.getenv("QA_MODEL_NAME", "google/flan-t5-small")
-            task = os.getenv("QA_HF_TASK", "text2text-generation")
-
-            # Keep defaults conservative for reliability/cost.
-            try:
-                temperature = float(os.getenv("QA_TEMPERATURE", "0.0"))
-            except ValueError:
-                temperature = 0.0
-            try:
-                max_length = int(os.getenv("QA_MAX_LENGTH", "256"))
-            except ValueError:
-                max_length = 256
-
-            model_kwargs = {
-                "temperature": temperature,
-                "max_length": max_length,
-            }
-
-            # HuggingFaceHub reads HUGGINGFACEHUB_API_TOKEN from env.
-            try:
-                _LLM = HuggingFaceHub(repo_id=repo_id, task=task, model_kwargs=model_kwargs)
-                return _LLM
-            except Exception as e:
-                if force_hf_hub:
-                    raise
-                # Fall back to local pipeline if hosted inference is unavailable/misconfigured.
-                print(f"WARNING: QA_BACKEND=hf_hub failed ({e}); falling back to local transformers.", flush=True)
-
-        # Fallback: local transformers pipeline (heavier; may OOM on small instances).
-        # Import transformers lazily so embedding-only workloads don't pay the import cost/memory.
-        # HuggingFacePipeline moved into langchain-community in newer versions.
-        try:
-            from langchain_community.llms import HuggingFacePipeline
-        except ImportError:  # pragma: no cover
-            from langchain.llms import HuggingFacePipeline
-
-        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-
-        model_name = os.getenv("QA_MODEL_NAME", "google/flan-t5-small")
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
-        _LLM = HuggingFacePipeline(pipeline=pipe)
-    return _LLM
-
-# ----------- PDF Processing -----------
-
-def get_pdf_text(pdf_files):
-    parts = []
-    for pdf in pdf_files:
-        reader = PdfReader(pdf)
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                parts.append(page_text)
-    return "\n".join(parts)
+def _tokenize(text: str) -> list[str]:
+    return [t.lower() for t in _WORD_RE.findall(text or "")]
 
 
-def get_text_chunks(text, chunk_size=1000, chunk_overlap=200):
-    splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        length_function=len,
-    )
-    return splitter.split_text(text)
-
-
-def iter_text_chunks_from_pdfs(pdf_files, chunk_size=1000, chunk_overlap=200):
-    """
-    Memory-efficient chunker that avoids building one huge `raw_text` string.
-
-    Produces character-based chunks with overlap using a simple sliding window
-    over extracted page text.
-    """
-
+def iter_text_chunks_from_pdf_streams(
+    pdf_streams,
+    *,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+    max_chunks: int | None = None,
+) -> str:
     if chunk_overlap >= chunk_size:
         raise ValueError("chunk_overlap must be < chunk_size")
 
+    produced = 0
     buf = ""
-    for pdf in pdf_files:
-        reader = PdfReader(pdf)
+    for stream in pdf_streams:
+        reader = PdfReader(stream)
         for page in reader.pages:
-            page_text = page.extract_text()
-            if not page_text:
+            page_text = page.extract_text() or ""
+            if not page_text.strip():
                 continue
-            # Keep separators to avoid accidental word-joins across pages.
             buf += page_text + "\n"
             while len(buf) >= chunk_size:
                 yield buf[:chunk_size]
+                produced += 1
+                if max_chunks and produced >= max_chunks:
+                    return
                 buf = buf[chunk_size - chunk_overlap :]
 
     tail = buf.strip()
@@ -151,123 +48,149 @@ def iter_text_chunks_from_pdfs(pdf_files, chunk_size=1000, chunk_overlap=200):
         yield tail
 
 
-def get_vector_store(chunks, store_dir="faiss_index"):
-    os.makedirs(store_dir, exist_ok=True)
-    embeddings = _get_embeddings()
-    # Import lazily to avoid faiss import cost on module import.
-    from langchain_community.vectorstores import FAISS
+def bm25_top_k(
+    chunks: list[str],
+    query: str,
+    *,
+    k: int = 6,
+    k1: float = 1.5,
+    b: float = 0.75,
+) -> list[int]:
+    if not chunks:
+        return []
+    q_tokens = _tokenize(query)
+    if not q_tokens:
+        return list(range(min(k, len(chunks))))
 
-    max_chunks = os.getenv("MAX_CHUNKS")
-    max_chunks_limit = None
-    if max_chunks:
-        try:
-            limit = int(max_chunks)
-            if limit > 0:
-                max_chunks_limit = limit
-        except ValueError:
-            pass
-    else:
-        # Render free/low-tier instances can OOM on very large PDFs.
-        # Put a conservative cap unless the operator explicitly configures MAX_CHUNKS.
-        if os.getenv("RENDER"):
-            max_chunks_limit = 1000
-
-    default_batch = "32" if os.getenv("RENDER") else "64"
-    try:
-        batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", default_batch))
-    except ValueError:
-        batch_size = int(default_batch)
-    if batch_size <= 0:
-        batch_size = int(default_batch)
-    vector_store = None
-
-    batch = []
-    seen = 0
+    tokenized = []
+    doc_freq = {}
+    lengths = []
     for chunk in chunks:
-        if not chunk:
+        tokens = _tokenize(chunk)
+        tokenized.append(tokens)
+        lengths.append(len(tokens) or 1)
+        seen = set(tokens)
+        for t in seen:
+            doc_freq[t] = doc_freq.get(t, 0) + 1
+
+    n_docs = len(chunks)
+    avg_len = (sum(lengths) / n_docs) if n_docs else 1.0
+
+    def idf(term: str) -> float:
+        df = doc_freq.get(term, 0)
+        return math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
+
+    scores = []
+    for idx, tokens in enumerate(tokenized):
+        tf = {}
+        for t in tokens:
+            tf[t] = tf.get(t, 0) + 1
+        dl = lengths[idx]
+        denom_norm = k1 * (1.0 - b + b * (dl / avg_len))
+        score = 0.0
+        for t in q_tokens:
+            f = tf.get(t, 0)
+            if not f:
+                continue
+            score += idf(t) * (f * (k1 + 1.0)) / (f + denom_norm)
+        scores.append((score, idx))
+
+    scores.sort(key=lambda x: x[0], reverse=True)
+    top = [idx for score, idx in scores[: max(1, min(k, len(scores)))] if score > 0]
+    if top:
+        return top
+    return list(range(min(k, len(chunks))))
+
+
+def build_context(
+    chunks: list[str],
+    indices: list[int],
+    *,
+    max_chars: int = 8000,
+) -> str:
+    parts = []
+    total = 0
+    for idx in indices:
+        if idx < 0 or idx >= len(chunks):
             continue
-        batch.append(chunk)
-        seen += 1
-        if max_chunks_limit and seen >= max_chunks_limit:
+        text = chunks[idx].strip()
+        if not text:
+            continue
+        if total + len(text) > max_chars:
+            remaining = max(0, max_chars - total)
+            if remaining <= 0:
+                break
+            text = text[:remaining]
+        parts.append(text)
+        total += len(text)
+        if total >= max_chars:
             break
-
-        if len(batch) >= batch_size:
-            if vector_store is None:
-                vector_store = FAISS.from_texts(batch, embedding=embeddings)
-            else:
-                vector_store.add_texts(batch)
-            batch = []
-
-    if batch:
-        if vector_store is None:
-            vector_store = FAISS.from_texts(batch, embedding=embeddings)
-        else:
-            vector_store.add_texts(batch)
-
-    if vector_store is None:
-        raise ValueError("No text chunks to embed (PDF may be scanned or empty).")
-    vector_store.save_local(store_dir)
-    print(f"✅ FAISS index built and saved at {store_dir}")
-    return vector_store
+    return "\n\n---\n\n".join(parts)
 
 
-# ----------- Question Answering -----------
-
-def answer_question(question, index_path="faiss_index"):
-    if not os.path.exists(index_path):
-        raise FileNotFoundError(f"FAISS index not found at {index_path}")
-
-    global _VECTOR_STORE, _VECTOR_STORE_META
-    embeddings = _get_embeddings()
-    # Import lazily to avoid faiss import cost on module import.
-    from langchain_community.vectorstores import FAISS
-
-    # Cache the loaded index to avoid re-loading (and re-allocating) on every query.
-    index_file = os.path.join(index_path, "index.faiss")
-    pkl_file = os.path.join(index_path, "index.pkl")
-    mtime = 0.0
-    try:
-        mtime = max(
-            os.path.getmtime(index_file),
-            os.path.getmtime(pkl_file) if os.path.exists(pkl_file) else 0.0,
-        )
-    except Exception:
-        mtime = 0.0
-
-    meta = (os.path.abspath(index_path), mtime)
-    if _VECTOR_STORE is None or _VECTOR_STORE_META != meta:
-        _VECTOR_STORE = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-        _VECTOR_STORE_META = meta
-
-    vector_store = _VECTOR_STORE
-
-    llm = _get_llm()
-
-    # Avoid depending on `langchain.chains` (which has been split into separate packages in newer releases).
-    docs = vector_store.similarity_search(question, k=4)
-    context = "\n\n".join(getattr(d, "page_content", str(d)) for d in docs)
-
+def generate_answer(question: str, context: str) -> str:
     qa_mode = (os.getenv("QA_MODE") or "").strip().lower()
     if qa_mode in ("retrieval_only", "context_only", "no_llm"):
-        max_chars = 0
-        try:
-            max_chars = int(os.getenv("QA_CONTEXT_MAX_CHARS") or "8000")
-        except ValueError:
-            max_chars = 8000
-        if max_chars and len(context) > max_chars:
-            context = context[:max_chars]
-        return {"output_text": context, "mode": qa_mode, "k": 4}
+        return context
+
+    backend = (os.getenv("QA_BACKEND") or "hf_hub").strip().lower()
+    if backend not in ("hf_hub", "huggingface_hub", "hf_api", "auto"):
+        raise ValueError(f"Unsupported QA_BACKEND={backend}")
+
+    token = (
+        (os.getenv("HF_TOKEN") or "").strip()
+        or (os.getenv("HUGGINGFACEHUB_API_TOKEN") or "").strip()
+    )
+    if backend != "auto" and not token:
+        raise ValueError("Missing HF_TOKEN (or HUGGINGFACEHUB_API_TOKEN) for hosted inference.")
+
+    if not token and backend == "auto":
+        return context
+
+    from huggingface_hub import InferenceClient
+
+    model = (os.getenv("QA_MODEL_NAME") or "google/flan-t5-base").strip()
+    try:
+        max_new_tokens = int(os.getenv("QA_MAX_NEW_TOKENS") or "256")
+    except ValueError:
+        max_new_tokens = 256
+    try:
+        temperature = float(os.getenv("QA_TEMPERATURE") or "0.0")
+    except ValueError:
+        temperature = 0.0
+    try:
+        timeout_s = float(os.getenv("QA_TIMEOUT_S") or "90")
+    except ValueError:
+        timeout_s = 90.0
 
     prompt = (
-        "Use the provided context to answer the question.\n"
-        "If the answer is not in the context, say you don't know.\n\n"
+        "Answer the question using ONLY the context.\n"
+        "If the answer is not in the context, say: \"I don't know.\".\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {question}\n"
         "Answer:"
     )
 
+    client = InferenceClient(model=model, token=token, timeout=timeout_s)
+    # `text_generation` works for most hosted text2text/text-generation endpoints.
+    out = client.text_generation(
+        prompt,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
+        return_full_text=False,
+    )
+    return (out or "").strip()
+
+
+def coerce_to_seekable(stream):
+    """
+    PyPDF2 expects seekable streams. GridFS streams usually are, but for safety
+    (and to avoid surprises with wrappers), we can materialize into BytesIO when needed.
+    """
     try:
-        result = llm.invoke(prompt)
-    except AttributeError:  # pragma: no cover
-        result = llm(prompt)
-    return {"output_text": result}
+        stream.seek(0)
+        return stream
+    except Exception:
+        data = stream.read()
+        return BytesIO(data)
+

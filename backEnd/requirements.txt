@@ -4,17 +4,7 @@ flask-cors
 python-dotenv
 gunicorn
 pymongo[srv]>=4.6.0
+huggingface-hub>=0.20.0
 
 # PDF
 PyPDF2
-
-# Modern LangChain stack (consistent generation)
-langchain>=0.1.0
-langchain-community>=0.0.38
-langchain-huggingface>=0.0.3
-huggingface-hub>=0.20.0
-
-# ML stack
-sentence-transformers>=2.6.0
-faiss-cpu
-torch
