@@ -42,9 +42,55 @@ def _get_embeddings():
     return _EMBEDDINGS
 
 
+def _truthy(value: str) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+
 def _get_llm():
     global _LLM
     if _LLM is None:
+        backend = (os.getenv("QA_BACKEND") or "auto").strip().lower()
+        hf_token = (os.getenv("HUGGINGFACEHUB_API_TOKEN") or "").strip()
+
+        # Prefer the hosted Hugging Face Inference API when a token is present.
+        # This avoids downloading/initializing large models inside the Render container.
+        use_hf_hub = backend in ("hf_hub", "huggingface_hub", "hf_api") or (backend == "auto" and bool(hf_token))
+        if use_hf_hub:
+            strict = _truthy(os.getenv("QA_BACKEND_STRICT", "0"))
+            try:
+                from langchain_community.llms import HuggingFaceHub
+            except Exception:  # pragma: no cover
+                from langchain.llms import HuggingFaceHub
+
+            repo_id = os.getenv("QA_MODEL_NAME", "google/flan-t5-small")
+            task = os.getenv("QA_HF_TASK", "text2text-generation")
+
+            # Keep defaults conservative for reliability/cost.
+            try:
+                temperature = float(os.getenv("QA_TEMPERATURE", "0.0"))
+            except ValueError:
+                temperature = 0.0
+            try:
+                max_length = int(os.getenv("QA_MAX_LENGTH", "256"))
+            except ValueError:
+                max_length = 256
+
+            model_kwargs = {
+                "temperature": temperature,
+                "max_length": max_length,
+            }
+
+            # HuggingFaceHub reads HUGGINGFACEHUB_API_TOKEN from env.
+            try:
+                _LLM = HuggingFaceHub(repo_id=repo_id, task=task, model_kwargs=model_kwargs)
+                return _LLM
+            except Exception as e:
+                if strict:
+                    raise
+                # Fall back to local pipeline if hosted inference is unavailable/misconfigured.
+                print(f"WARNING: QA_BACKEND=hf_hub failed ({e}); falling back to local transformers.", flush=True)
+
+        # Fallback: local transformers pipeline (heavier; may OOM on small instances).
         # Import transformers lazily so embedding-only workloads don't pay the import cost/memory.
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 
