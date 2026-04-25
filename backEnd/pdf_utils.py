@@ -164,6 +164,7 @@ def generate_answer(question: str, context: str) -> str:
         timeout_s = 90.0
 
     prompt = (
+        "Be a strict PDF-grounded QA assistant. Use ONLY the provided context; do not use outside knowledge. If the answer is not explicitly supported by the context, reply exactly: I don't know. Then add: Clarifying question: <one question that would make it answerable>. If it is answerable, write: Answer: <1–4 short sentences>. Evidence: <2–4 bullets, each a short exact quote from the context (<=20 words) that supports the answer>. Do not add anything else. \n"
         "Answer the question using ONLY the context.\n"
         "If the answer is not in the context, say: \"I don't know.\".\n"
         "Write a concise answer in 3–6 sentences (max ~120 words).\n"
