@@ -374,12 +374,39 @@ def generate_answer(question: str, context: str) -> dict:
             "model": model,
         }
     except Exception as e:
+        # StopIteration is commonly raised when the upstream returns an empty/abruptly closed stream.
+        # It can be transient; try once more before degrading.
+        if isinstance(e, StopIteration):
+            try:
+                out = _call_hf()
+                raw_text = _coerce_hf_output_to_text(out)
+                text = _postprocess_answer(raw_text)
+                if text:
+                    return {
+                        "answer": text,
+                        "llm_used": True,
+                        "mode": qa_mode or "default",
+                        "backend": "huggingface_hub",
+                        "model": model,
+                    }
+            except Exception as e2:
+                e = e2
+
         try:
             # Keep the root cause in service logs even when the API response uses non-verbose warnings.
             print(f"[qa] HF LLM generation failed: {type(e).__name__}: {e}", flush=True)
         except Exception:
             pass
-        detail = f" ({type(e).__name__}: {e})" if verbose_warnings else ""
+
+        if verbose_warnings:
+            detail = f" ({type(e).__name__}: {e})"
+        elif isinstance(e, StopIteration):
+            detail = " (StopIteration: upstream returned an empty response)"
+        else:
+            # Include the exception type at minimum so callers can distinguish auth vs timeout vs upstream errors
+            # without leaking full stack traces or potentially large messages.
+            detail = f" ({type(e).__name__})"
+
         return {
             "answer": _extractive_fallback_answer(question, context),
             "llm_used": False,
