@@ -85,6 +85,114 @@ def _extractive_fallback_answer(question: str, context: str) -> str:
     return _format_answer(answer_sentence, evidence)
 
 
+def _extractive_evidence_quotes(question: str, context: str) -> list[str]:
+    """
+    Returns up to 2 short evidence quotes from the context based on token overlap.
+    Intended for "format repair" when an LLM answer is present but lacks evidence.
+    """
+    q_tokens = set(_tokenize(question))
+    if not q_tokens:
+        return []
+
+    scored: list[tuple[int, str]] = []
+    for sent in _split_sentences(context):
+        s_tokens = set(_tokenize(sent))
+        overlap = len(q_tokens & s_tokens)
+        if overlap <= 0:
+            continue
+        scored.append((overlap, sent))
+
+    if not scored:
+        return []
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_sentences: list[str] = []
+    seen = set()
+    for _, sent in scored:
+        key = re.sub(r"\s+", " ", sent).strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        top_sentences.append(sent)
+        if len(top_sentences) >= 2:
+            break
+
+    evidence: list[str] = []
+    for sent in top_sentences[:2]:
+        words = sent.split()
+        evidence.append(" ".join(words[:20]).strip())
+    return evidence
+
+
+def _coerce_hf_output_to_text(out) -> str:
+    """
+    huggingface_hub.InferenceClient can return different shapes depending on version/method.
+    Normalize to a plain string so downstream post-processing is stable.
+    """
+    if out is None:
+        return ""
+    if isinstance(out, str):
+        return out
+    generated_text = getattr(out, "generated_text", None)
+    if isinstance(generated_text, str):
+        return generated_text
+    if isinstance(out, dict):
+        for key in ("generated_text", "text", "answer", "output"):
+            val = out.get(key)
+            if isinstance(val, str):
+                return val
+    if isinstance(out, list) and out:
+        first = out[0]
+        if isinstance(first, str):
+            return first
+        if isinstance(first, dict):
+            for key in ("generated_text", "text", "answer", "output"):
+                val = first.get(key)
+                if isinstance(val, str):
+                    return val
+        generated_text = getattr(first, "generated_text", None)
+        if isinstance(generated_text, str):
+            return generated_text
+    return str(out)
+
+
+def _repair_to_strict_qa_format(llm_text: str, question: str, context: str) -> str:
+    """
+    Best-effort conversion of non-conforming LLM output into the strict QA format used by the API.
+    """
+    text = (llm_text or "").strip()
+    if not text:
+        return ""
+
+    low = text.lower()
+    if "i don't know" in low:
+        m = re.search(r"clarifying question\s*:\s*(.+)$", text, re.IGNORECASE | re.MULTILINE)
+        clar_q = (m.group(1).strip() if m else "") or "Which keyword/section/page should I search for in the PDF?"
+        return _format_idk(clar_q)
+
+    cleaned = re.sub(r"^\s*(answer|final)\s*:\s*", "", text, flags=re.IGNORECASE).strip()
+    if not cleaned:
+        cleaned = text
+
+    sents = _split_sentences(cleaned)
+    if sents:
+        answer = " ".join(sents[:2]).strip()
+    else:
+        answer = cleaned.splitlines()[0].strip()
+
+    try:
+        max_answer_words = int(os.getenv("QA_REPAIR_MAX_ANSWER_WORDS") or "60")
+    except ValueError:
+        max_answer_words = 60
+    if max_answer_words > 0:
+        words = answer.split()
+        if len(words) > max_answer_words:
+            answer = " ".join(words[:max_answer_words]).rstrip() + "â€¦"
+
+    evidence = _extractive_evidence_quotes(question, context)
+    return _format_answer(answer, evidence)
+
+
 def iter_text_chunks_from_pdf_streams(
     pdf_streams,
     *,
@@ -374,7 +482,8 @@ def generate_answer(question: str, context: str) -> dict:
 
     try:
         out = _call_hf()
-        text = _postprocess_answer(out)
+        raw_text = _coerce_hf_output_to_text(out)
+        text = _postprocess_answer(raw_text)
         if not text:
             raise RuntimeError("Empty model output")
 
@@ -384,6 +493,20 @@ def generate_answer(question: str, context: str) -> dict:
             or "evidence:" in text.lower()
         )
         if not looks_valid:
+            if _truthy(os.getenv("QA_REPAIR_FORMAT") or "1"):
+                repaired = _repair_to_strict_qa_format(text, question, context)
+                if repaired:
+                    note = "LLM output did not match expected QA format; repaired using extractive evidence."
+                    if verbose_warnings:
+                        note += f" (raw_type={type(out).__name__})"
+                    return {
+                        "answer": repaired,
+                        "llm_used": True,
+                        "mode": qa_mode or "default",
+                        "backend": "huggingface_hub",
+                        "model": model,
+                        "warning": note,
+                    }
             raise RuntimeError("Model output did not match expected QA format")
 
         return {
