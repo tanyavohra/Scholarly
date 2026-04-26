@@ -17,21 +17,6 @@ def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _WORD_RE.findall(text or "")]
 
 
-def _format_idk(clarifying_question: str) -> str:
-    q = (clarifying_question or "").strip() or "Which part of the PDF should I look at (section/page/keyword)?"
-    return f"I don't know.\nClarifying question: {q}"
-
-
-def _format_answer(answer: str, evidence: list[str]) -> str:
-    ans = (answer or "").strip()
-    ev = [e.strip() for e in (evidence or []) if (e or "").strip()]
-    if len(ev) > 2:
-        ev = ev[:2]
-    while len(ev) < 2:
-        ev.append("")
-    return ("Answer: " + ans + "\nEvidence:\n" + f"- {ev[0]}\n" + f"- {ev[1]}").strip()
-
-
 def _split_sentences(text: str) -> list[str]:
     raw = re.sub(r"\s+", " ", (text or "").strip())
     if not raw:
@@ -43,7 +28,7 @@ def _split_sentences(text: str) -> list[str]:
 def _extractive_fallback_answer(question: str, context: str) -> str:
     q_tokens = set(_tokenize(question))
     if not q_tokens:
-        return _format_idk("What exactly should I answer from the PDF?")
+        return "I don't know. What exactly should I answer from the PDF?"
 
     scored: list[tuple[int, str]] = []
     for sent in _split_sentences(context):
@@ -54,21 +39,10 @@ def _extractive_fallback_answer(question: str, context: str) -> str:
         scored.append((overlap, sent))
 
     if not scored:
-        return _format_idk("Which keyword or section should I search for in the PDF?")
+        return "I don't know. Which keyword or section should I search for in the PDF?"
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    top_sentences: list[str] = []
-    seen = set()
-    for _, sent in scored:
-        key = re.sub(r"\s+", " ", sent).strip().lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        top_sentences.append(sent)
-        if len(top_sentences) >= 2:
-            break
-
-    answer_sentence = top_sentences[0]
+    answer_sentence = scored[0][1].strip()
     try:
         max_answer_words = int(os.getenv("QA_EXTRACTIVE_MAX_ANSWER_WORDS") or "40")
     except ValueError:
@@ -78,50 +52,7 @@ def _extractive_fallback_answer(question: str, context: str) -> str:
         if len(words) > max_answer_words:
             answer_sentence = " ".join(words[:max_answer_words]).rstrip() + "…"
 
-    evidence = []
-    for sent in top_sentences[:2]:
-        words = sent.split()
-        evidence.append(" ".join(words[:20]).strip())
-    return _format_answer(answer_sentence, evidence)
-
-
-def _extractive_evidence_quotes(question: str, context: str) -> list[str]:
-    """
-    Returns up to 2 short evidence quotes from the context based on token overlap.
-    Intended for "format repair" when an LLM answer is present but lacks evidence.
-    """
-    q_tokens = set(_tokenize(question))
-    if not q_tokens:
-        return []
-
-    scored: list[tuple[int, str]] = []
-    for sent in _split_sentences(context):
-        s_tokens = set(_tokenize(sent))
-        overlap = len(q_tokens & s_tokens)
-        if overlap <= 0:
-            continue
-        scored.append((overlap, sent))
-
-    if not scored:
-        return []
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    top_sentences: list[str] = []
-    seen = set()
-    for _, sent in scored:
-        key = re.sub(r"\s+", " ", sent).strip().lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        top_sentences.append(sent)
-        if len(top_sentences) >= 2:
-            break
-
-    evidence: list[str] = []
-    for sent in top_sentences[:2]:
-        words = sent.split()
-        evidence.append(" ".join(words[:20]).strip())
-    return evidence
+    return answer_sentence
 
 
 def _coerce_hf_output_to_text(out) -> str:
@@ -154,43 +85,6 @@ def _coerce_hf_output_to_text(out) -> str:
         if isinstance(generated_text, str):
             return generated_text
     return str(out)
-
-
-def _repair_to_strict_qa_format(llm_text: str, question: str, context: str) -> str:
-    """
-    Best-effort conversion of non-conforming LLM output into the strict QA format used by the API.
-    """
-    text = (llm_text or "").strip()
-    if not text:
-        return ""
-
-    low = text.lower()
-    if "i don't know" in low:
-        m = re.search(r"clarifying question\s*:\s*(.+)$", text, re.IGNORECASE | re.MULTILINE)
-        clar_q = (m.group(1).strip() if m else "") or "Which keyword/section/page should I search for in the PDF?"
-        return _format_idk(clar_q)
-
-    cleaned = re.sub(r"^\s*(answer|final)\s*:\s*", "", text, flags=re.IGNORECASE).strip()
-    if not cleaned:
-        cleaned = text
-
-    sents = _split_sentences(cleaned)
-    if sents:
-        answer = " ".join(sents[:2]).strip()
-    else:
-        answer = cleaned.splitlines()[0].strip()
-
-    try:
-        max_answer_words = int(os.getenv("QA_REPAIR_MAX_ANSWER_WORDS") or "60")
-    except ValueError:
-        max_answer_words = 60
-    if max_answer_words > 0:
-        words = answer.split()
-        if len(words) > max_answer_words:
-            answer = " ".join(words[:max_answer_words]).rstrip() + "â€¦"
-
-    evidence = _extractive_evidence_quotes(question, context)
-    return _format_answer(answer, evidence)
 
 
 def iter_text_chunks_from_pdf_streams(
@@ -375,22 +269,9 @@ def generate_answer(question: str, context: str) -> dict:
         timeout_s = 90.0
 
     prompt = (
-        "You are a strict QA assistant. Answer ONLY using the provided context. "
-        "Do not use outside knowledge.\n\n"
-        "If the answer is NOT explicitly supported by the context, reply EXACTLY in this format:\n"
-        "I don't know.\n"
-        "Clarifying question: <one specific question that would make it answerable>\n\n"
-        "If the answer IS supported by the context, reply EXACTLY in this format:\n"
-        "Answer: <1–2 short sentences>\n"
-        "Evidence:\n"
-        "- <exact quote (<=20 words)>\n"
-        "- <exact quote (<=20 words)>\n\n"
-        "Rules:\n"
-        "- Do not include any information not present in the context.\n"
-        "- Do not paraphrase evidence; quotes must be exact.\n"
-        "- Do not include more than 2 evidence bullets.\n"
-        "- Ignore headings, prefaces, exercises, page footers, and \"Oral Comprehension Check\" sections.\n"
-        "- Do not output anything outside the specified formats.\n\n"
+        "Answer the user's question using ONLY the provided context. Do not use outside knowledge.\n\n"
+        "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question.\n"
+        "Otherwise, give a concise answer (1-3 sentences).\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {question}"
     )
@@ -400,21 +281,18 @@ def generate_answer(question: str, context: str) -> dict:
         if not text:
             return ""
 
-        m = re.search(
-            r"(I don't know\.\s*Clarifying question:.*)$",
-            text,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if m:
-            text = m.group(1).strip()
-        else:
-            m = re.search(
-                r"(Answer:.*?Evidence:\s*\n-\s*.*?\n-\s*.*)$",
-                text,
-                re.IGNORECASE | re.DOTALL,
-            )
+        text = re.sub(r"^\s*(answer|final)\s*:\s*", "", text, flags=re.IGNORECASE).strip()
+
+        # If the model outputs an "Evidence:" section (from older prompts), drop it.
+        if re.search(r"\n\s*evidence\s*:\s*\n", text, re.IGNORECASE):
+            text = re.split(r"\n\s*evidence\s*:\s*\n", text, flags=re.IGNORECASE, maxsplit=1)[0].strip()
+
+        # If it followed the old "I don't know.\nClarifying question: ..." template, collapse to one line.
+        if "clarifying question:" in text.lower() and "i don't know" in text.lower():
+            m = re.search(r"clarifying question\s*:\s*(.+)$", text, re.IGNORECASE | re.DOTALL)
             if m:
-                text = m.group(1).strip()
+                q = re.sub(r"\s+", " ", m.group(1)).strip()
+                text = f"I don't know. {q}" if q else "I don't know."
 
         paras = [p.strip() for p in re.split(r"\n\s*\n+", text) if p.strip()]
         seen = set()
@@ -426,6 +304,7 @@ def generate_answer(question: str, context: str) -> dict:
             seen.add(key)
             deduped.append(p)
         text = "\n\n".join(deduped).strip()
+        text = re.sub(r"\s+", " ", text).strip()
 
         try:
             max_words = int(os.getenv("QA_MAX_WORDS") or "140")
@@ -486,28 +365,6 @@ def generate_answer(question: str, context: str) -> dict:
         text = _postprocess_answer(raw_text)
         if not text:
             raise RuntimeError("Empty model output")
-
-        looks_valid = (
-            text.lower().startswith("i don't know.")
-            or text.lower().startswith("answer:")
-            or "evidence:" in text.lower()
-        )
-        if not looks_valid:
-            if _truthy(os.getenv("QA_REPAIR_FORMAT") or "1"):
-                repaired = _repair_to_strict_qa_format(text, question, context)
-                if repaired:
-                    note = "LLM output did not match expected QA format; repaired using extractive evidence."
-                    if verbose_warnings:
-                        note += f" (raw_type={type(out).__name__})"
-                    return {
-                        "answer": repaired,
-                        "llm_used": True,
-                        "mode": qa_mode or "default",
-                        "backend": "huggingface_hub",
-                        "model": model,
-                        "warning": note,
-                    }
-            raise RuntimeError("Model output did not match expected QA format")
 
         return {
             "answer": text,
