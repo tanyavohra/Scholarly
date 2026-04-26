@@ -13,12 +13,12 @@ services:
     build:
       context: ./backEnd
       dockerfile: Dockerfile.python
+    env_file:
+      - ./backEnd/.env
     environment:
       PORT: 8082
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       FAISS_DIR: /data/faiss_index
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      HUGGINGFACEHUB_API_TOKEN: ${HUGGINGFACEHUB_API_TOKEN:-}
     volumes:
       - faiss_data:/data
     ports:

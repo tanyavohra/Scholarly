@@ -11,12 +11,17 @@ import time
 import uuid
 from io import BytesIO 
 from dotenv import load_dotenv
+from pathlib import Path
 
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 import gridfs
 
-load_dotenv()
+_ENV_PATH = Path(__file__).with_name(".env")
+# Load `backEnd/.env` regardless of the process working directory (common in dev).
+# In containers, this file is typically not present and env vars are injected via the runtime.
+load_dotenv(dotenv_path=_ENV_PATH, override=False)
+load_dotenv(override=False)
 
 
 
@@ -679,6 +684,10 @@ _start_queue_poller()
 def healthz(): 
     db = _mongo_db() if USE_MONGO else _MONGO_DB
     active = _get_active_job()
+    hf_token_present = bool(
+        (os.getenv("HF_TOKEN") or "").strip()
+        or (os.getenv("HUGGINGFACEHUB_API_TOKEN") or "").strip()
+    )
     resp = {
         "status": "ok",
         "uptime_s": int(time.time() - _PROCESS_START_TS),
@@ -703,6 +712,12 @@ def healthz():
             if isinstance(active, dict)
             else None
         ),
+        "qa": {
+            "mode": (os.getenv("QA_MODE") or "").strip().lower() or "default",
+            "backend": (os.getenv("QA_BACKEND") or "hf_hub").strip().lower(),
+            "model": (os.getenv("QA_MODEL_NAME") or "google/flan-t5-base").strip(),
+            "hf_token_present": hf_token_present,
+        },
     }
     return jsonify(resp), 200
 

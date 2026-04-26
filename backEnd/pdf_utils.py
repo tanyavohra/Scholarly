@@ -374,6 +374,11 @@ def generate_answer(question: str, context: str) -> dict:
             "model": model,
         }
     except Exception as e:
+        try:
+            # Keep the root cause in service logs even when the API response uses non-verbose warnings.
+            print(f"[qa] HF LLM generation failed: {type(e).__name__}: {e}", flush=True)
+        except Exception:
+            pass
         detail = f" ({type(e).__name__}: {e})" if verbose_warnings else ""
         return {
             "answer": _extractive_fallback_answer(question, context),
