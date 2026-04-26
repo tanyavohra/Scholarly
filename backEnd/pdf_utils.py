@@ -266,6 +266,17 @@ def generate_answer(question: str, context: str) -> dict:
     except ValueError:
         timeout_s = 90.0
 
+    # Sampling params (used by both HF hub generation and HF router chat completion).
+    try:
+        repetition_penalty = float(os.getenv("QA_REPETITION_PENALTY") or "1.15")
+    except ValueError:
+        repetition_penalty = 1.15
+    try:
+        top_p = float(os.getenv("QA_TOP_P") or "0.9")
+    except ValueError:
+        top_p = 0.9
+    do_sample = _truthy(os.getenv("QA_DO_SAMPLE") or "0")
+
     prompt = (
         "Answer the user's question using ONLY the provided context. Do not use outside knowledge.\n\n"
         "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question.\n"
@@ -405,16 +416,6 @@ def generate_answer(question: str, context: str) -> dict:
 
     from huggingface_hub import InferenceClient
     client = InferenceClient(model=model, token=token, timeout=timeout_s)
-
-    try:
-        repetition_penalty = float(os.getenv("QA_REPETITION_PENALTY") or "1.15")
-    except ValueError:
-        repetition_penalty = 1.15
-    try:
-        top_p = float(os.getenv("QA_TOP_P") or "0.9")
-    except ValueError:
-        top_p = 0.9
-    do_sample = _truthy(os.getenv("QA_DO_SAMPLE") or "0")
 
     hf_method = (os.getenv("QA_HF_METHOD") or "").strip()
     if hf_method:
