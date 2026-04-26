@@ -274,18 +274,6 @@ const NotesPage = () => {
                       >
                         <ThumbsDown className="w-3.5 h-3.5" />
                       </motion.button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate("/pdf-chat", { state: { sourceUrl: n.pdf, note: n } });
-                        }}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-scholarly-amethyst transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
-                        title="Chat with this PDF"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" /> Chat
-                      </button>
-
                       <a
                         href={n.pdf}
                         target="_blank"
