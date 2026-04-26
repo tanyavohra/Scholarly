@@ -9,8 +9,6 @@ import multiprocessing
 import threading
 import time
 import uuid
-import urllib.parse
-import urllib.request
 from io import BytesIO 
 from dotenv import load_dotenv
 
@@ -332,59 +330,6 @@ def _clear_active_job_id(job_id: str) -> None:
         return
     except Exception:
         return
-
-
-def _is_http_url(url: str) -> bool:
-    try:
-        parsed = urllib.parse.urlparse(url or "")
-        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
-    except Exception:
-        return False
-
-
-def _download_url_to_path(url: str, dest_path: str, max_bytes: int | None = None) -> int:
-    if not _is_http_url(url):
-        raise ValueError("Invalid URL (must be http/https)")
-
-    timeout_secs = int(
-        os.getenv("PDF_DOWNLOAD_TIMEOUT_SECS", "60" if os.getenv("RENDER") else "25")
-    )
-    req = urllib.request.Request(url, headers={"User-Agent": "brainlink/1.0"})
-
-    total = 0
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_secs) as resp:
-            status = getattr(resp, "status", 200) or 200
-            if status >= 400:
-                raise ValueError(f"Download failed (status {status})")
-
-            content_length = resp.headers.get("Content-Length")
-            if content_length:
-                try:
-                    cl = int(content_length)
-                    if max_bytes and cl > max_bytes:
-                        raise ValueError("Remote PDF exceeds size limit")
-                except ValueError:
-                    # ignore invalid header
-                    pass
-
-            with open(dest_path, "wb") as f:
-                while True:
-                    chunk = resp.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    total += len(chunk)
-                    if max_bytes and total > max_bytes:
-                        raise ValueError("Remote PDF exceeds size limit")
-                    f.write(chunk)
-        return total
-    except Exception:
-        try:
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-        except Exception:
-            pass
-        raise
 
 
 PROCESS_PDF_ASYNC_DEFAULT = _truthy(
@@ -896,27 +841,6 @@ def _run_process_pdf_job(job_id: str, doc_id: str):
             doc_id=doc_id, 
         ) 
  
-        job = _load_persisted_job(job_id) or {} 
-        source_urls = job.get("source_urls") or [] 
-        if source_urls: 
-            _update_job(job_id, step="download_pdf", message="Downloading PDF(s)") 
-            max_bytes = app.config.get("MAX_CONTENT_LENGTH") 
-            if not max_bytes: 
-                try: 
-                    max_bytes = int(os.getenv("MAX_UPLOAD_BYTES") or "0") or None 
-                except ValueError: 
-                    max_bytes = None 
- 
-            for i, url in enumerate(source_urls): 
-                tmp_path = os.path.join(_DATA_ROOT, f".dl_{job_id}_{i}.pdf") 
-                _download_url_to_path(url, tmp_path, max_bytes=max_bytes) 
-                with open(tmp_path, "rb") as f: 
-                    _gridfs_store_doc_pdf(doc_id, f, filename=f"download_{i}.pdf", content_type="application/pdf", ordinal=i) 
-                try: 
-                    os.remove(tmp_path) 
-                except Exception: 
-                    pass 
- 
         pdf_gridouts = _gridfs_open_doc_pdfs(doc_id) 
         if not pdf_gridouts: 
             raise RuntimeError("No PDF found for this job/doc_id. Re-upload and try again.") 
@@ -994,39 +918,15 @@ def _run_process_pdf_job(job_id: str, doc_id: str):
     finally: 
         _clear_active_job_id(job_id) 
 
-
-def _run_process_pdf_job_from_urls(job_id: str, doc_id: str, source_urls: list[str]): 
-    # Back-compat: older job records used a separate URL runner. 
-    # New pipeline stores `source_urls` on the job and `_run_process_pdf_job` handles downloading. 
-    try: 
-        _update_job(job_id, source_urls=source_urls or []) 
-        _run_process_pdf_job(job_id, doc_id) 
-    finally: 
-        job = _load_persisted_job(job_id) or {} 
-        if job.get("status") not in ("queued", "running"): 
-            _clear_active_job_id(job_id) 
-
 @app.route("/process_pdf", methods=["POST"]) 
 def process_pdf(): 
     pdf_files = request.files.getlist("pdfFiles") 
 
-    source_urls = []
     if not pdf_files:
         data = request.get_json(silent=True) or {}
-        if isinstance(data.get("source_urls"), list):
-            source_urls = [str(u).strip() for u in (data.get("source_urls") or []) if str(u).strip()]
-        else:
-            single = str(data.get("source_url") or data.get("url") or "").strip()
-            if single:
-                source_urls = [single]
-
-    if source_urls:
-        invalid = [u for u in source_urls if not _is_http_url(u)]
-        if invalid:
-            return jsonify({"error": "Invalid source_url", "invalid": invalid[:3]}), 400
-
-    if not pdf_files and not source_urls: 
-        return jsonify({"error": "No PDF provided", "hint": "Send multipart/form-data field 'pdfFiles' or JSON { source_url }"}), 400 
+        if data.get("url") or data.get("source_url") or data.get("source_urls"):
+            return jsonify({"error": "URL-based PDF ingestion has been removed. Upload a PDF file instead."}), 400
+        return jsonify({"error": "No PDF provided", "hint": "Send multipart/form-data field 'pdfFiles'."}), 400 
  
     if not USE_MONGO: 
         return jsonify({"error": "MONGO_URI is required for reliable PDF processing on hosted deployments."}), 500 
@@ -1056,21 +956,18 @@ def process_pdf():
         _persist_job(job) 
  
         # Store uploaded PDFs in GridFS immediately so a Render restart doesn't lose inputs. 
-        if pdf_files: 
-            stored_ids = [] 
-            for i, file in enumerate(pdf_files): 
-                fid = _gridfs_store_doc_pdf( 
-                    doc_id, 
-                    file.stream, 
-                    filename=file.filename or f"upload_{i}.pdf", 
-                    content_type=file.mimetype or "application/pdf", 
-                    ordinal=i, 
-                ) 
-                if fid: 
-                    stored_ids.append(fid) 
-            _update_job(job_id, pdf_gridfs_ids=stored_ids, pdf_count=len(stored_ids)) 
-        elif source_urls: 
-            _update_job(job_id, source_urls=source_urls, message="Queued URL download") 
+        stored_ids = [] 
+        for i, file in enumerate(pdf_files): 
+            fid = _gridfs_store_doc_pdf( 
+                doc_id, 
+                file.stream, 
+                filename=file.filename or f"upload_{i}.pdf", 
+                content_type=file.mimetype or "application/pdf", 
+                ordinal=i, 
+            ) 
+            if fid: 
+                stored_ids.append(fid) 
+        _update_job(job_id, pdf_gridfs_ids=stored_ids, pdf_count=len(stored_ids)) 
 
         os.makedirs(_job_dir(job_id), exist_ok=True) 
         runner = _run_process_pdf_job 
@@ -1140,9 +1037,29 @@ def ask_question_route():
         except ValueError: 
             ctx_max = 8000 
         context = build_context(chunks, indices, max_chars=ctx_max) 
-        out_text = generate_answer(question, context) 
+        qa = generate_answer(question, context)
+        if isinstance(qa, str):
+            qa = {"answer": qa, "llm_used": False, "backend": "unknown", "mode": "legacy"}
+        qa = qa or {}
+        out_text = str(qa.get("answer") or "")
+        resp = {
+            "response": out_text,
+            "doc_id": doc_id,
+            "llm_used": bool(qa.get("llm_used")),
+            "backend": qa.get("backend"),
+            "qa_mode": qa.get("mode"),
+        }
+        if qa.get("model"):
+            resp["model"] = qa.get("model")
+        if qa.get("warning"):
+            resp["warning"] = qa.get("warning")
+
+        include_context = (os.getenv("QA_INCLUDE_CONTEXT") or "").strip().lower() in ("1", "true", "yes", "on")
+        if include_context:
+            resp["context"] = context
+
         print("Answer generated:", (out_text or "")[:200]) 
-        return jsonify({"response": out_text, "doc_id": doc_id}), 200 
+        return jsonify(resp), 200 
     except Exception as e: 
         import traceback 
         traceback.print_exc() 

@@ -3,8 +3,6 @@ const cors = require("cors");
 const path = require('path');
 const os = require("node:os");
 const crypto = require("node:crypto");
-const { pipeline } = require("node:stream/promises");
-const { Transform } = require("node:stream");
 const cookiesParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const { connectStorageEmulator } = require("firebase/storage");
@@ -138,166 +136,7 @@ const upload = multer({
 });
 const FormData = require('form-data'); // If using node-fetch or axios, still use form-data
 
-const PROCESSPDF_SOURCE_URL_ENABLE =
-  process.env.PROCESSPDF_SOURCE_URL_ENABLE != null
-    ? truthy(process.env.PROCESSPDF_SOURCE_URL_ENABLE)
-    : false;
-const PROCESSPDF_SOURCE_TTL_MS = (() => {
-  const parsed = parseInt(process.env.PROCESSPDF_SOURCE_TTL_MS || `${60 * 60 * 1000}`, 10); // 1 hour
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60 * 60 * 1000;
-})();
-const PROCESSPDF_SOURCE_MAX_ENTRIES = (() => {
-  const parsed = parseInt(process.env.PROCESSPDF_SOURCE_MAX_ENTRIES || "200", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 200;
-})();
-const PROCESSPDF_SOURCES_DIR = path.join(UPLOAD_TMP_DIR, "processpdf_sources");
-try {
-  fs.mkdirSync(PROCESSPDF_SOURCES_DIR, { recursive: true });
-} catch (err) {
-  console.warn(
-    `Failed to create processpdf source dir at ${PROCESSPDF_SOURCES_DIR}: ${err?.message || err}`,
-  );
-}
-
-const processPdfSources = new Map(); // token -> { path, filename, contentType, expiresAt }
-
-function isLocalHostname(hostname) {
-  const h = String(hostname || "").toLowerCase();
-  return h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "::1";
-}
-
-function normalizeBaseUrl(candidate) {
-  const trimmed = String(candidate || "").trim().replace(/\/+$/, "");
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(trimmed);
-    if (!["http:", "https:"].includes(parsed.protocol)) return null;
-    if (isLocalHostname(parsed.hostname)) return null;
-    return `${parsed.protocol}//${parsed.host}`;
-  } catch {
-    return null;
-  }
-}
-
-function getPublicBaseUrl(req) {
-  const configured = normalizeBaseUrl(process.env.PUBLIC_BASE_URL);
-  if (configured) return configured;
-  if ((process.env.PUBLIC_BASE_URL || "").trim()) {
-    console.warn("PUBLIC_BASE_URL is set but invalid/unreachable (must be public http(s) URL).");
-  }
-
-  const protoRaw = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
-  const hostRaw = String(req.headers["x-forwarded-host"] || req.headers.host || "")
-    .split(",")[0]
-    .trim();
-  const proto = protoRaw || req.protocol || "https";
-  if (!hostRaw) return null;
-  return normalizeBaseUrl(`${proto}://${hostRaw}`);
-}
-
-function sanitizeFilename(name) {
-  const base = String(name || "file.pdf").replace(/[\\\/]/g, "_");
-  return base.length > 180 ? base.slice(-180) : base;
-}
-
-async function registerProcessPdfSourceFile({ filePath, filename, contentType }) {
-  const rawToken =
-    typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : crypto.randomBytes(16).toString("hex");
-  const token = rawToken.replace(/[^a-zA-Z0-9_-]/g, "");
-  const destPath = path.join(PROCESSPDF_SOURCES_DIR, `${token}.pdf`);
-  await fs.promises.rename(filePath, destPath);
-  processPdfSources.set(token, {
-    path: destPath,
-    filename: filename || "file.pdf",
-    contentType: contentType || "application/pdf",
-    expiresAt: Date.now() + PROCESSPDF_SOURCE_TTL_MS,
-  });
-
-  // Prevent unbounded growth (and disk usage) under heavy traffic.
-  if (processPdfSources.size > PROCESSPDF_SOURCE_MAX_ENTRIES) {
-    try {
-      await cleanupProcessPdfSources();
-      const excess = processPdfSources.size - PROCESSPDF_SOURCE_MAX_ENTRIES;
-      if (excess > 0) {
-        let removed = 0;
-        for (const [oldToken, meta] of processPdfSources.entries()) {
-          if (removed >= excess) break;
-          // Skip the token we just added.
-          if (oldToken === token) continue;
-          processPdfSources.delete(oldToken);
-          removed += 1;
-          try {
-            if (meta?.path) await fs.promises.unlink(meta.path);
-          } catch {
-            // ignore
-          }
-        }
-      }
-    } catch {
-      // ignore eviction errors
-    }
-  }
-
-  return { token, path: destPath };
-}
-
-async function cleanupProcessPdfSources() {
-  const now = Date.now();
-  for (const [token, meta] of processPdfSources.entries()) {
-    if (!meta || meta.expiresAt <= now) {
-      processPdfSources.delete(token);
-      try {
-        if (meta?.path) await fs.promises.unlink(meta.path);
-      } catch {
-        // ignore
-      }
-    }
-  }
-}
-
-setInterval(
-  () => cleanupProcessPdfSources().catch(() => {}),
-  Math.min(10 * 60 * 1000, Math.max(60 * 1000, Math.floor(PROCESSPDF_SOURCE_TTL_MS / 2))),
-).unref?.();
-
-app.get("/processpdf/source/:token", async (req, res) => {
-  try {
-    const token = String(req.params.token || "").trim();
-    const meta = processPdfSources.get(token);
-    if (!meta || meta.expiresAt <= Date.now()) {
-      if (meta && meta.expiresAt <= Date.now()) {
-        processPdfSources.delete(token);
-        try {
-          await fs.promises.unlink(meta.path);
-        } catch {
-          // ignore
-        }
-      }
-      return res.status(404).json({ error: "Not found" });
-    }
-
-    let stat;
-    try {
-      stat = await fs.promises.stat(meta.path);
-    } catch {
-      processPdfSources.delete(token);
-      return res.status(404).json({ error: "Not found" });
-    }
-
-    res.setHeader("Content-Type", meta.contentType || "application/pdf");
-    res.setHeader("Content-Length", stat.size);
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename=\"${sanitizeFilename(meta.filename)}\"`,
-    );
-    await pipeline(fs.createReadStream(meta.path), res);
-  } catch (err) {
-    if (!res.headersSent) res.status(500).json({ error: "Failed to stream PDF" });
-  }
-});
+// URL-based PDF ingestion has been removed; only multipart file uploads are supported.
 
 const PORT = parseInt(process.env.PORT || "8081", 10);
 const JWT_SECRET = process.env.JWT_SECRET || "dev-insecure-change-me";
@@ -452,7 +291,6 @@ app.get("/healthz", async (req, res) => {
     return res.json({
       status: "ok",
       python_base_url: PYTHON_BASE_URL,
-      processpdf_source_url_enable: PROCESSPDF_SOURCE_URL_ENABLE,
       python_process_pdf_async: PYTHON_PROCESS_PDF_ASYNC,
       ...(process.env.RENDER_GIT_COMMIT ? { git_commit: process.env.RENDER_GIT_COMMIT } : {}),
     });
@@ -1906,58 +1744,6 @@ async function rmrf(dirPath) {
   }
 }
 
-async function downloadPdfUrlToPath(pdfUrl, destPath, maxBytes) {
-  const response = await axios.get(pdfUrl, {
-    responseType: "stream",
-    withCredentials: false,
-    timeout: 15_000,
-    maxRedirects: 3,
-    validateStatus: () => true,
-  });
-
-  if (response.status < 200 || response.status >= 300) {
-    const err = new Error(`Failed to fetch PDF (status ${response.status})`);
-    err.statusCode = 502;
-    throw err;
-  }
-
-  const contentLength = parseInt(response.headers?.["content-length"] || "0", 10);
-  if (contentLength && Number.isFinite(contentLength) && contentLength > maxBytes) {
-    const err = new Error("Remote PDF exceeds size limit");
-    err.statusCode = 413;
-    throw err;
-  }
-
-  let downloaded = 0;
-  const limiter = new Transform({
-    transform(chunk, encoding, cb) {
-      downloaded += chunk.length;
-      if (downloaded > maxBytes) {
-        const err = new Error("Remote PDF exceeds size limit");
-        err.statusCode = 413;
-        return cb(err);
-      }
-      return cb(null, chunk);
-    },
-  });
-
-  try {
-    await pipeline(response.data, limiter, fs.createWriteStream(destPath, { flags: "wx" }));
-  } catch (err) {
-    try {
-      await fs.promises.unlink(destPath);
-    } catch {
-      // ignore
-    }
-    throw err;
-  }
-
-  return {
-    contentType: response.headers?.["content-type"] || "application/pdf",
-    bytes: downloaded,
-  };
-}
-
 function processPdfUpload(req, res, next) {
   upload.array("pdfFiles")(req, res, async (err) => {
     if (!err) return next();
@@ -1983,11 +1769,24 @@ const processPdfHandler = async (req, res) => {
   const reqDir = path.join(UPLOAD_TMP_DIR, String(req.id || "noid"));
 
   try {
-    const url = req.body?.url;
+    const url = String(req.body?.url || "").trim();
     const files = Array.isArray(req.files) ? req.files : req.file ? [req.file] : [];
 
+    if (url) {
+      return res.status(400).json({
+        error: "URL-based PDF ingestion has been removed. Upload a PDF file instead.",
+        stage: "input",
+      });
+    }
+
+    if (files.length === 0) {
+      return res.status(400).json({
+        error: "No PDF uploaded",
+        hint: "Send multipart/form-data with field name 'pdfFiles'.",
+      });
+    }
+
     const pdfInputs = [];
-    let sourceUrls = null;
     if (files.length > 0) {
       for (const file of files) {
         if (!file?.path) continue;
@@ -1997,67 +1796,9 @@ const processPdfHandler = async (req, res) => {
           contentType: file.mimetype || "application/pdf",
         });
       }
-    } else if (url) {
-      let parsed;
-      try {
-        parsed = new URL(url);
-      } catch {
-        return res.status(400).json({ error: "Invalid PDF URL" });
-      }
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        return res.status(400).json({ error: "Invalid URL protocol" });
-      }
-
-      if (PROCESSPDF_SOURCE_URL_ENABLE) {
-        sourceUrls = [url];
-      } else {
-        try {
-          await fs.promises.mkdir(reqDir, { recursive: true });
-        } catch {
-          // ignore
-        }
-
-        const filename = path.basename(parsed.pathname || "file.pdf") || "file.pdf";
-        const destPath = path.join(
-          reqDir,
-          `url-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.pdf`,
-        );
-
-        try {
-          try {
-            const dl = await downloadPdfUrlToPath(url, destPath, MAX_UPLOAD_BYTES);
-            pdfInputs.push({
-              path: destPath,
-              filename,
-              contentType: dl.contentType,
-            });
-          } catch (err) {
-            console.error("FETCH PDF ERROR:", err);
-            const status = err?.statusCode || (err?.code === "ETIMEDOUT" ? 504 : 502);
-            return res.status(status).json({
-              error: err?.message || "Failed to fetch PDF",
-              stage: "fetch_pdf",
-              code: err?.code,
-            });
-          }
-        } catch (err) {
-          console.error("FETCH PDF ERROR:", err);
-          const status = err?.statusCode || (err?.code === "ETIMEDOUT" ? 504 : 502);
-          return res.status(status).json({
-            error: err?.message || "Failed to fetch PDF",
-            stage: "fetch_pdf",
-            code: err?.code,
-          });
-        }
-      }
-    } else {
-      return res.status(400).json({
-        error: "No PDF uploaded",
-        hint: "Send multipart/form-data with field name 'pdfFiles' or send JSON with { url }.",
-      });
     }
 
-    if (pdfInputs.length === 0 && !sourceUrls) {
+    if (pdfInputs.length === 0) {
       return res.status(400).json({ error: "No PDF uploaded" });
     }
 
@@ -2119,145 +1860,37 @@ const processPdfHandler = async (req, res) => {
 
       const pythonProcessPdfUrl = `${PYTHON_BASE_URL}/process_pdf${PYTHON_PROCESS_PDF_ASYNC ? "?async=1" : ""}`;
 
-      const postJson = async (payload) => {
-        const headers = { "Content-Type": "application/json" };
-        if (req.id) headers["x-request-id"] = req.id;
-        return axios.post(pythonProcessPdfUrl, payload, {
-          headers,
-          timeout: PYTHON_PROCESS_PDF_TIMEOUT_MS,
-          maxContentLength: 2 * 1024 * 1024,
-          maxBodyLength: 256 * 1024,
-          validateStatus: () => true,
-        });
-      };
-
-      // Prefer URL-based ingestion (small JSON request) to avoid multipart aborts on low-tier hosting.
-      if (PROCESSPDF_SOURCE_URL_ENABLE) {
-        let sourceUrlsToSend = sourceUrls;
-
-        if (!sourceUrlsToSend && pdfInputs.length > 0 && files.length > 0) {
-          const baseUrl = getPublicBaseUrl(req);
-          if (baseUrl) {
-            sourceUrlsToSend = [];
-            for (const part of pdfInputs) {
-              const reg = await registerProcessPdfSourceFile({
-                filePath: part.path,
-                filename: part.filename,
-                contentType: part.contentType,
-              });
-              part.path = reg.path; // keep multipart fallback possible
-              sourceUrlsToSend.push(`${baseUrl}/processpdf/source/${reg.token}`);
-            }
-          } else {
-            console.warn("PUBLIC_BASE_URL missing; cannot use source_url mode for uploaded PDFs.");
-          }
-        }
-
-        if (sourceUrlsToSend && sourceUrlsToSend.length > 0) {
-          const payload =
-            sourceUrlsToSend.length === 1
-              ? { source_url: sourceUrlsToSend[0] }
-              : { source_urls: sourceUrlsToSend };
-
-          let attempt = 0;
-          const maxAttempts = Math.max(1, PYTHON_PROCESS_PDF_RETRIES + 1);
-          while (attempt < maxAttempts) {
-            try {
-              const r = await postJson(payload);
-              if (isRetryableStatus(r?.status) && attempt < maxAttempts - 1) {
-                attempt += 1;
-                const backoffMs = Math.min(10_000, 750 * Math.pow(2, attempt - 1));
-                console.warn(`Retrying ${pythonProcessPdfUrl} after upstream status ${r?.status}`);
-                await sleep(backoffMs);
-                continue;
-              }
-              response = r;
-              break;
-            } catch (err) {
-              attempt += 1;
-              if (attempt >= maxAttempts || !isRetryable(err)) throw err;
-              const backoffMs = Math.min(10_000, 750 * Math.pow(2, attempt - 1));
-              console.warn(
-                `Retrying ${pythonProcessPdfUrl} after error (${err?.code || "unknown"}): ${err?.message || ""}`,
-              );
-              await sleep(backoffMs);
-            }
-          }
-
-          // Back-compat: old Python builds only accept multipart.
-          const maybeMsg = response?.data?.error;
-          if (
-            response?.status === 400 &&
-            typeof maybeMsg === "string" &&
-            maybeMsg.toLowerCase().includes("no pdf")
-          ) {
-            response = null;
-          }
-        }
-      }
-
-      if (!response) {
-        // If we skipped downloading a URL because source_url mode was enabled but the Python build is old,
-        // fall back to downloading+multipart.
-        if (url && pdfInputs.length === 0) {
-          let parsed;
-          try {
-            parsed = new URL(url);
-          } catch {
-            return res.status(400).json({ error: "Invalid PDF URL" });
-          }
-
-          try {
-            await fs.promises.mkdir(reqDir, { recursive: true });
-          } catch {
-            // ignore
-          }
-
-          const filename = path.basename(parsed.pathname || "file.pdf") || "file.pdf";
-          const destPath = path.join(
-            reqDir,
-            `url-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.pdf`,
-          );
-          const dl = await downloadPdfUrlToPath(url, destPath, MAX_UPLOAD_BYTES);
-          pdfInputs.push({
-            path: destPath,
-            filename,
-            contentType: dl.contentType,
+      let attempt = 0;
+      const maxAttempts = Math.max(1, PYTHON_PROCESS_PDF_RETRIES + 1);
+      while (attempt < maxAttempts) {
+        try {
+          const { formData, headers } = await buildFormData();
+          const r = await axios.post(pythonProcessPdfUrl, formData, {
+            headers,
+            timeout: PYTHON_PROCESS_PDF_TIMEOUT_MS,
+            maxContentLength: 2 * 1024 * 1024, // protect Node from large upstream responses
+            // Request size is already capped by multer (uploads).
+            // Keep axios' maxBodyLength unlimited to avoid aborting valid multipart requests.
+            maxBodyLength: Infinity,
+            validateStatus: () => true,
           });
-        }
-
-        let attempt = 0;
-        const maxAttempts = Math.max(1, PYTHON_PROCESS_PDF_RETRIES + 1);
-        while (attempt < maxAttempts) {
-          try {
-            const { formData, headers } = await buildFormData();
-            const r = await axios.post(pythonProcessPdfUrl, formData, {
-              headers,
-              timeout: PYTHON_PROCESS_PDF_TIMEOUT_MS,
-              maxContentLength: 2 * 1024 * 1024, // protect Node from large upstream responses
-              // Request size is already capped by multer (uploads) / download limiter (URLs).
-              // Keep axios' maxBodyLength unlimited to avoid aborting valid multipart requests.
-              maxBodyLength: Infinity,
-              validateStatus: () => true,
-            });
-            if (isRetryableStatus(r?.status) && attempt < maxAttempts - 1) {
-              attempt += 1;
-              const backoffMs = Math.min(10_000, 750 * Math.pow(2, attempt - 1));
-              console.warn(`Retrying ${pythonProcessPdfUrl} after upstream status ${r?.status}`);
-              await sleep(backoffMs);
-              continue;
-            }
-            response = r;
-            break;
-          } catch (err) {
+          if (isRetryableStatus(r?.status) && attempt < maxAttempts - 1) {
             attempt += 1;
-            if (attempt >= maxAttempts || !isRetryable(err)) throw err;
             const backoffMs = Math.min(10_000, 750 * Math.pow(2, attempt - 1));
-            console.warn(
-              `Retrying ${pythonProcessPdfUrl} after error (${err?.code || "unknown"}): ${err?.message || ""}`,
-            );
+            console.warn(`Retrying ${pythonProcessPdfUrl} after upstream status ${r?.status}`);
             await sleep(backoffMs);
+            continue;
           }
+          response = r;
+          break;
+        } catch (err) {
+          attempt += 1;
+          if (attempt >= maxAttempts || !isRetryable(err)) throw err;
+          const backoffMs = Math.min(10_000, 750 * Math.pow(2, attempt - 1));
+          console.warn(
+            `Retrying ${pythonProcessPdfUrl} after error (${err?.code || "unknown"}): ${err?.message || ""}`,
+          );
+          await sleep(backoffMs);
         }
       }
     } catch (err) {

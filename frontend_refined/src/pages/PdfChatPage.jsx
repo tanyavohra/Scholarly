@@ -9,7 +9,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const PdfChatPage = () => {
   const location = useLocation();
-  const initialUrl = location.state?.sourceUrl || "";
+  const legacySourceUrl = String(location.state?.sourceUrl || "").trim();
 
   const [messages, setMessages] = useState([
     {
@@ -26,6 +26,14 @@ const PdfChatPage = () => {
   const autoStartedRef = useRef(false);
 
   useEffect(() => {
+    if (!legacySourceUrl) return;
+    toast({
+      title: "URL PDFs disabled",
+      description: "This build no longer supports URL-based PDF ingestion. Please upload the PDF file.",
+    });
+  }, [legacySourceUrl]);
+
+  useEffect(() => {
     // Switching documents resets state.
     setProcessed(false);
     setPdfFile(null);
@@ -37,22 +45,9 @@ const PdfChatPage = () => {
         text: "Upload a PDF and I’ll answer questions about it.",
       },
     ]);
-  }, [initialUrl]);
+  }, [legacySourceUrl]);
 
-  useEffect(() => {
-    // Match legacy behavior: auto-start processing when opening chat from a note URL.
-    if (!initialUrl) return;
-    if (processed || processing) return;
-    if (autoStartedRef.current) return;
-    autoStartedRef.current = true;
-    const id = setTimeout(() => {
-      handleProcess();
-    }, 500);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialUrl]);
-
-  const canProcess = useMemo(() => Boolean(pdfFile) || Boolean(String(initialUrl || "").trim()), [pdfFile, initialUrl]);
+  const canProcess = useMemo(() => Boolean(pdfFile), [pdfFile]);
 
   const waitForJob = async (jobId) => {
     const startedAt = Date.now();
@@ -98,14 +93,9 @@ const PdfChatPage = () => {
     if (!canProcess) return;
     setProcessing(true);
     try {
-      let res;
-      if (pdfFile) {
-        const formData = new FormData();
-        formData.append("pdfFiles", pdfFile, pdfFile.name || "file.pdf");
-        res = await api.postForm("/processpdf", formData);
-      } else {
-        res = await api.post("/processpdf", { url: String(initialUrl || "").trim() });
-      }
+      const formData = new FormData();
+      formData.append("pdfFiles", pdfFile, pdfFile.name || "file.pdf");
+      const res = await api.postForm("/processpdf", formData);
 
       // Node may run in async mode.
       if (res?.job_id) {
@@ -166,6 +156,9 @@ const PdfChatPage = () => {
       const payload = docId ? { question: q, doc_id: docId } : { question: q };
       const res = await api.post("/ask_question", payload);
       setMessages((prev) => [...prev, { role: "system", text: res?.response || "No response." }]);
+      if (res?.warning) {
+        toast({ title: "QA notice", description: String(res.warning) });
+      }
     } catch (err) {
       toast({
         title: "QA failed",

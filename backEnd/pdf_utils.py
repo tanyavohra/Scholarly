@@ -17,6 +17,74 @@ def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _WORD_RE.findall(text or "")]
 
 
+def _format_idk(clarifying_question: str) -> str:
+    q = (clarifying_question or "").strip() or "Which part of the PDF should I look at (section/page/keyword)?"
+    return f"I don't know.\nClarifying question: {q}"
+
+
+def _format_answer(answer: str, evidence: list[str]) -> str:
+    ans = (answer or "").strip()
+    ev = [e.strip() for e in (evidence or []) if (e or "").strip()]
+    if len(ev) > 2:
+        ev = ev[:2]
+    while len(ev) < 2:
+        ev.append("")
+    return ("Answer: " + ans + "\nEvidence:\n" + f"- {ev[0]}\n" + f"- {ev[1]}").strip()
+
+
+def _split_sentences(text: str) -> list[str]:
+    raw = re.sub(r"\s+", " ", (text or "").strip())
+    if not raw:
+        return []
+    parts = re.split(r"(?<=[.!?])\s+", raw)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _extractive_fallback_answer(question: str, context: str) -> str:
+    q_tokens = set(_tokenize(question))
+    if not q_tokens:
+        return _format_idk("What exactly should I answer from the PDF?")
+
+    scored: list[tuple[int, str]] = []
+    for sent in _split_sentences(context):
+        s_tokens = set(_tokenize(sent))
+        overlap = len(q_tokens & s_tokens)
+        if overlap <= 0:
+            continue
+        scored.append((overlap, sent))
+
+    if not scored:
+        return _format_idk("Which keyword or section should I search for in the PDF?")
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_sentences: list[str] = []
+    seen = set()
+    for _, sent in scored:
+        key = re.sub(r"\s+", " ", sent).strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        top_sentences.append(sent)
+        if len(top_sentences) >= 2:
+            break
+
+    answer_sentence = top_sentences[0]
+    try:
+        max_answer_words = int(os.getenv("QA_EXTRACTIVE_MAX_ANSWER_WORDS") or "40")
+    except ValueError:
+        max_answer_words = 40
+    if max_answer_words > 0:
+        words = answer_sentence.split()
+        if len(words) > max_answer_words:
+            answer_sentence = " ".join(words[:max_answer_words]).rstrip() + "…"
+
+    evidence = []
+    for sent in top_sentences[:2]:
+        words = sent.split()
+        evidence.append(" ".join(words[:20]).strip())
+    return _format_answer(answer_sentence, evidence)
+
+
 def iter_text_chunks_from_pdf_streams(
     pdf_streams,
     *,
@@ -128,10 +196,31 @@ def build_context(
     return "\n\n---\n\n".join(parts)
 
 
-def generate_answer(question: str, context: str) -> str:
+def generate_answer(question: str, context: str) -> dict:
+    """
+    Returns:
+      {
+        "answer": str,
+        "llm_used": bool,
+        "backend": "huggingface_hub" | "extractive" | "none",
+        "mode": str,
+        "model": str? (when llm_used),
+        "warning": str? (when degraded),
+      }
+    """
+
     qa_mode = (os.getenv("QA_MODE") or "").strip().lower()
+    verbose_warnings = _truthy(os.getenv("QA_VERBOSE_WARNINGS") or "0")
     if qa_mode in ("retrieval_only", "context_only", "no_llm"):
-        return context
+        if _truthy(os.getenv("QA_CONTEXT_AS_RESPONSE") or "0"):
+            return {"answer": context, "llm_used": False, "mode": qa_mode, "backend": "none"}
+        return {
+            "answer": _extractive_fallback_answer(question, context),
+            "llm_used": False,
+            "mode": qa_mode,
+            "backend": "extractive",
+            "warning": f"QA_MODE={qa_mode} disables LLM; returning extractive fallback answer. Set QA_CONTEXT_AS_RESPONSE=1 to return raw context instead.",
+        }
 
     backend = (os.getenv("QA_BACKEND") or "hf_hub").strip().lower()
     if backend not in ("hf_hub", "huggingface_hub", "hf_api", "auto"):
@@ -142,10 +231,24 @@ def generate_answer(question: str, context: str) -> str:
         or (os.getenv("HUGGINGFACEHUB_API_TOKEN") or "").strip()
     )
     if backend != "auto" and not token:
-        raise ValueError("Missing HF_TOKEN (or HUGGINGFACEHUB_API_TOKEN) for hosted inference.")
+        return {
+            "answer": _extractive_fallback_answer(question, context),
+            "llm_used": False,
+            "mode": qa_mode or "default",
+            "backend": "extractive",
+            "warning": "Missing HF_TOKEN (or HUGGINGFACEHUB_API_TOKEN); returning extractive fallback answer.",
+        }
 
     if not token and backend == "auto":
-        return context
+        if _truthy(os.getenv("QA_CONTEXT_AS_RESPONSE") or "0"):
+            return {"answer": context, "llm_used": False, "mode": qa_mode or "default", "backend": "none"}
+        return {
+            "answer": _extractive_fallback_answer(question, context),
+            "llm_used": False,
+            "mode": qa_mode or "default",
+            "backend": "extractive",
+            "warning": "QA_BACKEND=auto with no token; returning extractive fallback answer.",
+        }
 
     from huggingface_hub import InferenceClient
 
@@ -164,40 +267,47 @@ def generate_answer(question: str, context: str) -> str:
         timeout_s = 90.0
 
     prompt = (
-    "You are a strict QA assistant. Answer ONLY using the provided context. "
-    "Do not use outside knowledge.\n\n"
+        "You are a strict QA assistant. Answer ONLY using the provided context. "
+        "Do not use outside knowledge.\n\n"
+        "If the answer is NOT explicitly supported by the context, reply EXACTLY in this format:\n"
+        "I don't know.\n"
+        "Clarifying question: <one specific question that would make it answerable>\n\n"
+        "If the answer IS supported by the context, reply EXACTLY in this format:\n"
+        "Answer: <1–2 short sentences>\n"
+        "Evidence:\n"
+        "- <exact quote (<=20 words)>\n"
+        "- <exact quote (<=20 words)>\n\n"
+        "Rules:\n"
+        "- Do not include any information not present in the context.\n"
+        "- Do not paraphrase evidence; quotes must be exact.\n"
+        "- Do not include more than 2 evidence bullets.\n"
+        "- Ignore headings, prefaces, exercises, page footers, and \"Oral Comprehension Check\" sections.\n"
+        "- Do not output anything outside the specified formats.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question: {question}"
+    )
 
-    "If the answer is NOT explicitly supported by the context, reply EXACTLY in this format:\n"
-    "I don't know.\n"
-    "Clarifying question: <one specific question that would make it answerable>\n\n"
-
-    "If the answer IS supported by the context, reply EXACTLY in this format:\n"
-    "Answer: <1–2 short sentences>\n"
-    "Evidence:\n"
-    "- <exact quote (<=20 words)>\n"
-    "- <exact quote (<=20 words)>\n\n"
-
-    "Rules:\n"
-    "- Do not include any information not present in the context.\n"
-    "- Do not paraphrase evidence; quotes must be exact.\n"
-    "- Do not include more than 2 evidence bullets.\n"
-    "- Ignore headings, prefaces, exercises, page footers, and \"Oral Comprehension Check\" sections.\n"
-    "- Do not output anything outside the specified formats.\n\n"
-
-    f"Context:\n{context}\n\n"
-    f"Question: {question}"
-)
-        
     def _postprocess_answer(raw: str) -> str:
         text = (raw or "").strip()
         if not text:
             return ""
 
-        # Some hosted endpoints may echo parts of the prompt.
-        if "Answer:" in text:
-            text = text.split("Answer:", 1)[-1].strip()
+        m = re.search(
+            r"(I don't know\.\s*Clarifying question:.*)$",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if m:
+            text = m.group(1).strip()
+        else:
+            m = re.search(
+                r"(Answer:.*?Evidence:\s*\n-\s*.*?\n-\s*.*)$",
+                text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if m:
+                text = m.group(1).strip()
 
-        # De-dupe repeated paragraphs (very common failure mode on small/free models).
         paras = [p.strip() for p in re.split(r"\n\s*\n+", text) if p.strip()]
         seen = set()
         deduped = []
@@ -209,7 +319,6 @@ def generate_answer(question: str, context: str) -> str:
             deduped.append(p)
         text = "\n\n".join(deduped).strip()
 
-        # Word cap (keeps UX snappy + avoids runaway repetition).
         try:
             max_words = int(os.getenv("QA_MAX_WORDS") or "140")
         except ValueError:
@@ -222,7 +331,7 @@ def generate_answer(question: str, context: str) -> str:
         return text
 
     client = InferenceClient(model=model, token=token, timeout=timeout_s)
-    # `text_generation` works for most hosted text2text/text-generation endpoints.
+
     try:
         repetition_penalty = float(os.getenv("QA_REPETITION_PENALTY") or "1.15")
     except ValueError:
@@ -233,16 +342,66 @@ def generate_answer(question: str, context: str) -> str:
         top_p = 0.9
     do_sample = _truthy(os.getenv("QA_DO_SAMPLE") or "0")
 
-    out = client.text_generation(
-        prompt,
-        max_new_tokens=max_new_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        do_sample=do_sample,
-        repetition_penalty=repetition_penalty,
-        return_full_text=False,
-    )
-    return _postprocess_answer(out)
+    hf_method = (os.getenv("QA_HF_METHOD") or "").strip()
+    if hf_method:
+        generate = getattr(client, hf_method, None)
+        if generate is None:
+            raise ValueError(f"QA_HF_METHOD={hf_method} not found on InferenceClient")
+    else:
+        model_l = model.lower()
+        if any(t in model_l for t in ("t5", "bart")) and hasattr(client, "text2text_generation"):
+            generate = getattr(client, "text2text_generation")
+        else:
+            generate = getattr(client, "text_generation")
+
+    def _call_hf() -> str:
+        try:
+            return generate(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                do_sample=do_sample,
+                repetition_penalty=repetition_penalty,
+                return_full_text=False,
+            )
+        except TypeError:
+            return generate(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+            )
+
+    try:
+        out = _call_hf()
+        text = _postprocess_answer(out)
+        if not text:
+            raise RuntimeError("Empty model output")
+
+        looks_valid = (
+            text.lower().startswith("i don't know.")
+            or text.lower().startswith("answer:")
+            or "evidence:" in text.lower()
+        )
+        if not looks_valid:
+            raise RuntimeError("Model output did not match expected QA format")
+
+        return {
+            "answer": text,
+            "llm_used": True,
+            "mode": qa_mode or "default",
+            "backend": "huggingface_hub",
+            "model": model,
+        }
+    except Exception as e:
+        detail = f" ({type(e).__name__}: {e})" if verbose_warnings else ""
+        return {
+            "answer": _extractive_fallback_answer(question, context),
+            "llm_used": False,
+            "mode": qa_mode or "default",
+            "backend": "extractive",
+            "warning": f"LLM generation failed; returning extractive fallback answer.{detail}",
+        }
 
 
 def coerce_to_seekable(stream):
