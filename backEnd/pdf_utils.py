@@ -164,13 +164,30 @@ def generate_answer(question: str, context: str) -> str:
         timeout_s = 90.0
 
     prompt = (
-        "Be a strict PDF-grounded QA assistant. Use ONLY the provided context; do not use outside knowledge. If the answer is not explicitly supported by the context, reply exactly: I don't know. Then add: Clarifying question: <one question that would make it answerable>. If it is answerable, write: Answer: <1–4 short sentences>. Evidence: <2–4 bullets, each a short exact quote from the context (<=20 words) that supports the answer>. Do not add anything else. \n"
-        "Answer ONLY the user's question in 1-2 short sentences. Do NOT copy/paste the context. Ignore headings, prefaces, exercises, page footers, and "Oral Comprehension Check" sections. If the answer is not explicitly in the context, say exactly: I don't know..\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {question}\n"
-        "Answer:"
-    )
+    "You are a strict QA assistant. Answer ONLY using the provided context. "
+    "Do not use outside knowledge.\n\n"
 
+    "If the answer is NOT explicitly supported by the context, reply EXACTLY in this format:\n"
+    "I don't know.\n"
+    "Clarifying question: <one specific question that would make it answerable>\n\n"
+
+    "If the answer IS supported by the context, reply EXACTLY in this format:\n"
+    "Answer: <1–2 short sentences>\n"
+    "Evidence:\n"
+    "- <exact quote (<=20 words)>\n"
+    "- <exact quote (<=20 words)>\n\n"
+
+    "Rules:\n"
+    "- Do not include any information not present in the context.\n"
+    "- Do not paraphrase evidence; quotes must be exact.\n"
+    "- Do not include more than 2 evidence bullets.\n"
+    "- Ignore headings, prefaces, exercises, page footers, and \"Oral Comprehension Check\" sections.\n"
+    "- Do not output anything outside the specified formats.\n\n"
+
+    f"Context:\n{context}\n\n"
+    f"Question: {question}"
+)
+        
     def _postprocess_answer(raw: str) -> str:
         text = (raw or "").strip()
         if not text:
