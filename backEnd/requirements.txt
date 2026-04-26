@@ -5,6 +5,7 @@ python-dotenv
 gunicorn
 pymongo[srv]>=4.6.0
 huggingface-hub>=0.20.0
+openai>=1.0.0
 
 # PDF
 PyPDF2

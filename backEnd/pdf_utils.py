@@ -225,7 +225,7 @@ def generate_answer(question: str, context: str) -> dict:
         }
 
     backend = (os.getenv("QA_BACKEND") or "hf_hub").strip().lower()
-    if backend not in ("hf_hub", "huggingface_hub", "hf_api", "auto"):
+    if backend not in ("hf_hub", "huggingface_hub", "hf_api", "hf_chat", "auto"):
         raise ValueError(f"Unsupported QA_BACKEND={backend}")
 
     token = (
@@ -251,8 +251,6 @@ def generate_answer(question: str, context: str) -> dict:
             "backend": "extractive",
             "warning": "QA_BACKEND=auto with no token; returning extractive fallback answer.",
         }
-
-    from huggingface_hub import InferenceClient
 
     model = (os.getenv("QA_MODEL_NAME") or "google/flan-t5-base").strip()
     try:
@@ -317,6 +315,95 @@ def generate_answer(question: str, context: str) -> dict:
 
         return text
 
+    def _run_hf_chat() -> dict:
+        """
+        Use the Hugging Face router (OpenAI-compatible) chat completion API.
+        This is the most reliable way to use provider-backed LLMs on HF.
+
+        Expected model format for HF Inference is typically: "<repo_id>:hf-inference"
+        Example: "katanemo/Arch-Router-1.5B:hf-inference"
+        """
+        try:
+            from openai import OpenAI
+        except Exception as e:
+            raise RuntimeError(
+                "QA_BACKEND=hf_chat requires the Python package `openai`. "
+                "Add it to requirements.txt and redeploy."
+            ) from e
+
+        base_url = (os.getenv("HF_ROUTER_BASE_URL") or "https://router.huggingface.co/v1").strip()
+        chat_model = model if ":" in model else f"{model}:hf-inference"
+
+        client = OpenAI(base_url=base_url, api_key=token)
+        completion = client.chat.completions.create(
+            model=chat_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You answer questions using ONLY the provided context. "
+                        "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
+                        "Otherwise give a concise answer (1-3 sentences)."
+                    ),
+                },
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+            ],
+            temperature=temperature,
+            max_tokens=max_new_tokens,
+            top_p=top_p,
+        )
+
+        msg = None
+        try:
+            msg = completion.choices[0].message.content
+        except Exception:
+            msg = None
+
+        raw_text = (msg or "").strip()
+        text = _postprocess_answer(raw_text)
+        if not text:
+            raise RuntimeError("Empty model output")
+
+        return {
+            "answer": text,
+            "llm_used": True,
+            "mode": qa_mode or "default",
+            "backend": "hf_router_chat",
+            "model": chat_model,
+        }
+
+    if backend == "hf_chat":
+        try:
+            return _run_hf_chat()
+        except Exception as e:
+            # Retry once for transient upstream empty responses.
+            if isinstance(e, StopIteration):
+                try:
+                    return _run_hf_chat()
+                except Exception as e2:
+                    e = e2
+
+            try:
+                print(f"[qa] HF chat generation failed: {type(e).__name__}: {e}", flush=True)
+            except Exception:
+                pass
+
+            if verbose_warnings:
+                detail = f" ({type(e).__name__}: {e})"
+            elif isinstance(e, StopIteration):
+                detail = " (StopIteration: upstream returned an empty response)"
+            else:
+                detail = f" ({type(e).__name__})"
+
+            return {
+                "answer": _extractive_fallback_answer(question, context),
+                "llm_used": False,
+                "mode": qa_mode or "default",
+                "backend": "extractive",
+                "warning": f"LLM generation failed; returning extractive fallback answer.{detail}",
+            }
+
+    from huggingface_hub import InferenceClient
     client = InferenceClient(model=model, token=token, timeout=timeout_s)
 
     try:
