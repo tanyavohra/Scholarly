@@ -829,6 +829,44 @@ app.post("/uservote", async (req, res) => {
   }
 });
 
+// Batch lookup of the current user's vote state for multiple questions.
+// Returns: { votes: { [questionId]: -1|0|1 } }
+app.post("/api/questions/uservotes", async (req, res) => {
+  const token = req.cookies.token;
+  if (!token) {
+    return res.status(401).json({ Message: "We need token Provide it..." });
+  }
+
+  const ids = Array.isArray(req.body?.question_ids) ? req.body.question_ids : [];
+  const questionIds = ids
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  if (questionIds.length === 0) {
+    return res.json({ votes: {} });
+  }
+
+  try {
+    const user_id = await get_author_id(token);
+    const rows = await Vote.find({ user_id, question_id: { $in: questionIds } }).select({
+      question_id: 1,
+      value: 1,
+    });
+
+    const votes = {};
+    for (const v of rows || []) {
+      const qid = Number(v?.question_id);
+      const val = Number(v?.value || 0);
+      if (Number.isFinite(qid) && qid > 0) votes[qid] = val;
+    }
+
+    return res.json({ votes });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to fetch user votes" });
+  }
+});
+
 app.post("/questionrating", async (req, res) => {
   try {
     const questions = await Question.find({ id: req.body.target_id }).select({

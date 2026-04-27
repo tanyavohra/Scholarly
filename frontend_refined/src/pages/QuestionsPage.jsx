@@ -116,24 +116,6 @@ const QuestionsPage = () => {
     return new Set(safeArray(markedQuestionsQuery.data).map((q) => q?.id).filter(Boolean));
   }, [markedQuestionsQuery.data]);
 
-  const voteMutation = useMutation({
-    mutationFn: async ({ targetId, voteType }) => {
-      const res = await api.post("/vote", { target_id: targetId, vote_type: voteType, is_comment: false });
-      if (res?.Message) throw new Error(String(res.Message));
-      return res;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["questions"] });
-    },
-    onError: (err) => {
-      toast({
-        title: "Vote failed",
-        description: err?.data?.Message || err?.data?.error || err?.message || "Unable to vote.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const bookmarkMutation = useMutation({
     mutationFn: async ({ questionId, nextMarked }) => {
       const path = nextMarked ? "/question_marked" : "/question_unmarked";
@@ -239,6 +221,51 @@ const QuestionsPage = () => {
     return filteredQuestions.map((q) => q?.id).filter((id) => id != null);
   }, [filteredQuestions]);
 
+  const myVotesQuery = useQuery({
+    queryKey: ["myVotes", visibleQuestionIds.join(",")],
+    enabled: visibleQuestionIds.length > 0,
+    queryFn: async () => {
+      try {
+        const res = await api.post("/api/questions/uservotes", { question_ids: visibleQuestionIds });
+        const votes = res && typeof res === "object" ? res.votes : null;
+        return votes && typeof votes === "object" ? votes : {};
+      } catch {
+        return {};
+      }
+    },
+    staleTime: 30 * 1000,
+  });
+  const myVotes = myVotesQuery.data || {};
+
+  const voteMutation = useMutation({
+    mutationFn: async ({ targetId, voteType }) => {
+      const res = await api.post("/vote", { target_id: targetId, vote_type: voteType, is_comment: false });
+      if (res?.Message) throw new Error(String(res.Message));
+      return res;
+    },
+    onMutate: async ({ targetId, voteType }) => {
+      const key = ["myVotes", visibleQuestionIds.join(",")];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData(key) || {};
+      const current = Number(prev?.[targetId] || 0);
+      const next = current === voteType ? 0 : voteType;
+      queryClient.setQueryData(key, { ...(prev || {}), [targetId]: next });
+      return { prev, key };
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["questions"] });
+      await queryClient.invalidateQueries({ queryKey: ["myVotes"] });
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.key) queryClient.setQueryData(ctx.key, ctx.prev || {});
+      toast({
+        title: "Vote failed",
+        description: err?.data?.Message || err?.data?.error || err?.message || "Unable to vote.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const answerCountsQuery = useQuery({
     queryKey: ["answerCounts", visibleQuestionIds.join(",")],
     enabled: visibleQuestionIds.length > 0,
@@ -278,6 +305,7 @@ const QuestionsPage = () => {
           const qTags = tagsByQuestionId.get(q.id) || [];
           const isMarked = markedSet.has(q.id);
           const rating = Number(q.rating || 0);
+          const myVote = Number(myVotes?.[q.id] || 0);
           const isExpanded = expandedId === q.id;
           const comments = isExpanded ? safeArray(commentsQuery.data) : null;
           const cachedCount =
@@ -312,9 +340,14 @@ const QuestionsPage = () => {
                         e.stopPropagation();
                         voteMutation.mutate({ targetId: q.id, voteType: 1 });
                       }}
-                      className="p-2 rounded-lg hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
-                    >
-                      <ThumbsUp className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                      className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
+                        myVote === 1 ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      }`}
+                      >
+                      <ThumbsUp
+                        className="w-4 h-4"
+                        fill={myVote === 1 ? "currentColor" : "none"}
+                      />
                     </motion.button>
                     <span className="text-sm font-bold text-foreground">{rating}</span>
                     <motion.button
@@ -323,9 +356,16 @@ const QuestionsPage = () => {
                         e.stopPropagation();
                         voteMutation.mutate({ targetId: q.id, voteType: -1 });
                       }}
-                      className="p-2 rounded-lg hover:bg-destructive/10 transition-colors bg-transparent border-0 cursor-pointer"
-                    >
-                      <ThumbsDown className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                      className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
+                        myVote === -1
+                          ? "text-destructive bg-destructive/10"
+                          : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      }`}
+                      >
+                      <ThumbsDown
+                        className="w-4 h-4"
+                        fill={myVote === -1 ? "currentColor" : "none"}
+                      />
                     </motion.button>
                   </div>
 
@@ -357,7 +397,7 @@ const QuestionsPage = () => {
                         }`}
                         title={isMarked ? "Remove bookmark" : "Bookmark"}
                       >
-                        <Bookmark className="w-4 h-4" />
+                        <Bookmark className="w-4 h-4" fill={isMarked ? "currentColor" : "none"} />
                       </button>
                     </div>
 
