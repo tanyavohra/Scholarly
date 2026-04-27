@@ -85,7 +85,7 @@ def _extract_definitional_abbrevs(text: str) -> dict[str, str]:
 
     # long (ABBR)
     for m in re.finditer(
-        r"\b([A-Za-z][A-Za-z][A-Za-z0-9\- ]{2,80}?)\s*\(\s*([A-Z]{2,10})\s*\)",
+        r"\b([A-Za-z][A-Za-z][A-Za-z0-9\- ]{2,80}?)\s*\(\s*([A-Z0-9]{2,12})\s*\)",
         raw,
     ):
         long_form = re.sub(r"\s+", " ", (m.group(1) or "").strip()).lower()
@@ -95,7 +95,7 @@ def _extract_definitional_abbrevs(text: str) -> dict[str, str]:
 
     # ABBR (long)
     for m in re.finditer(
-        r"\b([A-Z]{2,10})\s*\(\s*([A-Za-z][A-Za-z0-9\- ]{2,80}?)\s*\)",
+        r"\b([A-Z0-9]{2,12})\s*\(\s*([A-Za-z][A-Za-z0-9\- ]{2,80}?)\s*\)",
         raw,
     ):
         abbr = (m.group(1) or "").strip().lower()
@@ -193,7 +193,7 @@ def _expand_query_for_retrieval(query: str, *, chunks: list[str] | None = None) 
         q_lower = base.lower()
 
         # Expand explicit abbreviations defined in the document.
-        for token in re.findall(r"\b[a-z]{2,10}\b", q_lower):
+        for token in re.findall(r"\b[a-z0-9]{2,12}\b", q_lower):
             long_form = abbr_map.get(token)
             if long_form:
                 expansions.append(long_form)
@@ -502,11 +502,7 @@ def generate_answer(question: str, context: str) -> dict:
             "Otherwise, give a concise answer (1-3 sentences).\n\n"
         )
 
-    prompt = (
-        system_instr
-        f"Context:\n{context}\n\n"
-        f"Question: {question}"
-    )
+    prompt = system_instr + f"Context:\n{context}\n\nQuestion: {question}"
 
     def _postprocess_answer(raw: str) -> str:
         text = (raw or "").strip()
@@ -569,24 +565,26 @@ def generate_answer(question: str, context: str) -> dict:
         chat_model = model if ":" in model else f"{model}:hf-inference"
 
         client = OpenAI(base_url=base_url, api_key=token)
+        if allow_general:
+            system_content = (
+                "You answer questions using the provided context as evidence. "
+                "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
+                "but do NOT invent claims about the specific PDF/document that are not supported by the context. "
+                "If the user asks for a fact about the document and it is not supported by the context, say \"I don't know\" "
+                "and ask one clarifying question. Otherwise give a concise answer (1-3 sentences)."
+            )
+        else:
+            system_content = (
+                "You answer questions using ONLY the provided context. "
+                "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
+                "Otherwise give a concise answer (1-3 sentences)."
+            )
         completion = client.chat.completions.create(
             model=chat_model,
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        (
-                            "You answer questions using the provided context as evidence. "
-                            "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
-                            "but do NOT invent claims about the specific PDF/document that are not supported by the context. "
-                            "If the user asks for a fact about the document and it is not supported by the context, say \"I don't know\" "
-                            "and ask one clarifying question. Otherwise give a concise answer (1-3 sentences)."
-                            if allow_general
-                            else "You answer questions using ONLY the provided context. "
-                            "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
-                            "Otherwise give a concise answer (1-3 sentences)."
-                        )
-                    ),
+                    "content": system_content,
                 },
                 {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
             ],
