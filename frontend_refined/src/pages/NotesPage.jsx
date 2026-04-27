@@ -264,7 +264,7 @@ const NotesPage = () => {
                       >
                         <ThumbsUp
                                                 className="w-4 h-4"
-                                                fill={myVote === 1 ? "currentColor" : "none"}
+                                                fill={voteType === 1 ? "currentColor" : "none"}
                                               /> {rating}
                       </motion.button>
                       <motion.button
@@ -277,7 +277,7 @@ const NotesPage = () => {
                       >
                           <ThumbsDown
                                                 className="w-4 h-4"
-                                                fill={myVote === -1 ? "currentColor" : "none"}
+                                                fill={voteType === -1 ? "currentColor" : "none"}
                                               />
                       </motion.button>
                       <a
