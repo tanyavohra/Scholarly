@@ -13,8 +13,216 @@ def _truthy(value: str) -> bool:
 _WORD_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 
 
+_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "into",
+    "is",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "with",
+}
+
+
+def _parse_query_synonyms_env() -> dict[str, str]:
+    """
+    Env format:
+      QA_QUERY_SYNONYMS="ai=artificial intelligence;ml=machine learning"
+    """
+
+    raw = (os.getenv("QA_QUERY_SYNONYMS") or "").strip()
+    if not raw:
+        return {}
+
+    out: dict[str, str] = {}
+    for part in re.split(r"[;\n]+", raw):
+        part = (part or "").strip()
+        if not part or "=" not in part:
+            continue
+        k, v = part.split("=", 1)
+        k = (k or "").strip().lower()
+        v = (v or "").strip()
+        if k and v:
+            out[k] = v
+    return out
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen = set()
+    out = []
+    for x in items:
+        key = re.sub(r"\s+", " ", (x or "").strip()).lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(re.sub(r"\s+", " ", x).strip())
+    return out
+
+
+def _extract_definitional_abbrevs(text: str) -> dict[str, str]:
+    """
+    Extract pairs like:
+      Artificial Intelligence (AI)
+      AI (Artificial Intelligence)
+
+    Returns: { "ai": "artificial intelligence", ... } (lowercased keys/values).
+    """
+
+    out: dict[str, str] = {}
+    raw = text or ""
+    if not raw:
+        return out
+
+    # long (ABBR)
+    for m in re.finditer(
+        r"\b([A-Za-z][A-Za-z][A-Za-z0-9\- ]{2,80}?)\s*\(\s*([A-Z]{2,10})\s*\)",
+        raw,
+    ):
+        long_form = re.sub(r"\s+", " ", (m.group(1) or "").strip()).lower()
+        abbr = (m.group(2) or "").strip().lower()
+        if abbr and long_form and abbr not in out:
+            out[abbr] = long_form
+
+    # ABBR (long)
+    for m in re.finditer(
+        r"\b([A-Z]{2,10})\s*\(\s*([A-Za-z][A-Za-z0-9\- ]{2,80}?)\s*\)",
+        raw,
+    ):
+        abbr = (m.group(1) or "").strip().lower()
+        long_form = re.sub(r"\s+", " ", (m.group(2) or "").strip()).lower()
+        if abbr and long_form and abbr not in out:
+            out[abbr] = long_form
+
+    return out
+
+
+def _find_acronym_expansions(text: str, acronym: str, *, max_hits: int = 5) -> list[str]:
+    """
+    Given acronym like "ai", try to find phrases in text whose initial letters match.
+    Example: "artificial intelligence" -> "ai"
+
+    This is intentionally heuristic and bounded; results are used only to improve retrieval.
+    """
+
+    ac = (acronym or "").strip().lower()
+    if not ac or not ac.isalpha() or not (2 <= len(ac) <= 8):
+        return []
+
+    words = re.findall(r"[A-Za-z]+", text or "")
+    if not words:
+        return []
+
+    hits: list[str] = []
+    # Allow a few stopwords inside phrases, but only count non-stopwords as acronym letters.
+    max_span = min(len(words), max(10, len(ac) * 5))
+
+    for i in range(len(words)):
+        letters: list[str] = []
+        phrase_words: list[str] = []
+        for j in range(i, min(len(words), i + max_span)):
+            w = words[j]
+            phrase_words.append(w)
+            wl = w.lower()
+            if wl not in _STOPWORDS:
+                letters.append(wl[0])
+                if len(letters) > len(ac):
+                    break
+
+            if len(letters) == len(ac) and "".join(letters) == ac:
+                phrase = " ".join(phrase_words).strip()
+                if phrase:
+                    hits.append(phrase)
+                break
+
+        if len(hits) >= max_hits:
+            break
+
+    return _dedupe_preserve_order(hits)[:max_hits]
+
+
+def _expand_query_for_retrieval(query: str, *, chunks: list[str] | None = None) -> str:
+    base = (query or "").strip()
+    if not base:
+        return base
+
+    synonyms = {}
+    try:
+        synonyms = _parse_query_synonyms_env()
+    except Exception:
+        pass
+
+    expansions: list[str] = []
+    for t in _tokenize(base):
+        mapped = synonyms.get(t)
+        if mapped:
+            expansions.append(mapped)
+
+    # Document-driven abbreviation expansion (optional).
+    if chunks and _truthy(os.getenv("QA_ABBREV_EXPAND") or "0"):
+        try:
+            max_chars = int(os.getenv("QA_ABBREV_SCAN_MAX_CHARS") or "200000")
+        except ValueError:
+            max_chars = 200000
+
+        scan_parts: list[str] = []
+        total = 0
+        for c in chunks:
+            if not c:
+                continue
+            s = str(c)
+            if total + len(s) > max_chars:
+                s = s[: max(0, max_chars - total)]
+            if s:
+                scan_parts.append(s)
+                total += len(s)
+            if total >= max_chars:
+                break
+
+        scan_text = "\n".join(scan_parts)
+        abbr_map = _extract_definitional_abbrevs(scan_text)
+        q_lower = base.lower()
+
+        # Expand explicit abbreviations defined in the document.
+        for token in re.findall(r"\b[a-z]{2,10}\b", q_lower):
+            long_form = abbr_map.get(token)
+            if long_form:
+                expansions.append(long_form)
+
+        # Also add abbreviation if the user asks the long form explicitly.
+        for abbr, long_form in abbr_map.items():
+            if long_form and long_form in q_lower:
+                expansions.append(abbr)
+
+        # Expand acronym-like tokens by searching for matching phrases in the document text.
+        if _truthy(os.getenv("QA_ACRONYM_EXPAND") or "1"):
+            for token in re.findall(r"\b[a-z]{2,8}\b", q_lower):
+                if token in abbr_map:
+                    continue
+                expansions.extend(_find_acronym_expansions(scan_text, token, max_hits=3))
+
+    expansions = _dedupe_preserve_order(expansions)
+    if not expansions:
+        return base
+
+    # Appending keeps the user's original phrasing while improving lexical retrieval.
+    return base + " " + " ".join(expansions)
+
+
 def _tokenize(text: str) -> list[str]:
-    return [t.lower() for t in _WORD_RE.findall(text or "")]
+    raw = text or ""
+    # Normalize dotted abbreviations: "A.I." -> "AI"
+    raw = re.sub(r"\b([A-Za-z])\.\s*", r"\1", raw)
+    return [t.lower() for t in _WORD_RE.findall(raw)]
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -26,7 +234,7 @@ def _split_sentences(text: str) -> list[str]:
 
 
 def _extractive_fallback_answer(question: str, context: str) -> str:
-    q_tokens = set(_tokenize(question))
+    q_tokens = set(_tokenize(_expand_query_for_retrieval(question, chunks=[context])))
     if not q_tokens:
         return "I don't know. What exactly should I answer from the PDF?"
 
@@ -128,7 +336,7 @@ def bm25_top_k(
 ) -> list[int]:
     if not chunks:
         return []
-    q_tokens = _tokenize(query)
+    q_tokens = _tokenize(_expand_query_for_retrieval(query, chunks=chunks))
     if not q_tokens:
         return list(range(min(k, len(chunks))))
 
@@ -277,10 +485,25 @@ def generate_answer(question: str, context: str) -> dict:
         top_p = 0.9
     do_sample = _truthy(os.getenv("QA_DO_SAMPLE") or "0")
 
+    allow_general = _truthy(os.getenv("QA_ALLOW_GENERAL_KNOWLEDGE") or "0")
+    if allow_general:
+        system_instr = (
+            "Answer the user's question using the provided context as evidence.\n\n"
+            "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
+            "but do NOT invent claims about the specific PDF/document that are not supported by the context.\n\n"
+            "If the user asks for a fact about the document and it is not supported by the context, say "
+            "\"I don't know\" and ask one clarifying question.\n\n"
+            "Give a concise answer (1-3 sentences).\n\n"
+        )
+    else:
+        system_instr = (
+            "Answer the user's question using ONLY the provided context. Do not use outside knowledge.\n\n"
+            "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question.\n"
+            "Otherwise, give a concise answer (1-3 sentences).\n\n"
+        )
+
     prompt = (
-        "Answer the user's question using ONLY the provided context. Do not use outside knowledge.\n\n"
-        "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question.\n"
-        "Otherwise, give a concise answer (1-3 sentences).\n\n"
+        system_instr
         f"Context:\n{context}\n\n"
         f"Question: {question}"
     )
@@ -352,9 +575,17 @@ def generate_answer(question: str, context: str) -> dict:
                 {
                     "role": "system",
                     "content": (
-                        "You answer questions using ONLY the provided context. "
-                        "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
-                        "Otherwise give a concise answer (1-3 sentences)."
+                        (
+                            "You answer questions using the provided context as evidence. "
+                            "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
+                            "but do NOT invent claims about the specific PDF/document that are not supported by the context. "
+                            "If the user asks for a fact about the document and it is not supported by the context, say \"I don't know\" "
+                            "and ask one clarifying question. Otherwise give a concise answer (1-3 sentences)."
+                            if allow_general
+                            else "You answer questions using ONLY the provided context. "
+                            "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
+                            "Otherwise give a concise answer (1-3 sentences)."
+                        )
                     ),
                 },
                 {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
