@@ -154,6 +154,8 @@ const NotesPage = () => {
   const openParam = String(searchParams.get("open") || "").trim();
   const openHandledRef = useRef(false);
   const [highlightId, setHighlightId] = useState(null);
+  const [voteMap, setVoteMap] = useState({}); // { noteId: 1 | -1 | 0 }
+
 
   useEffect(() => {
     if (!openParam) return;
@@ -204,99 +206,151 @@ const NotesPage = () => {
         <div className="card-elevated p-6 text-sm text-destructive">Failed to load notes.</div>
       )}
 
-      <motion.div
-        variants={animContainer}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 md:grid-cols-2 gap-4"
-      >
-        {notes.map((n) => {
-          const isMarked = markedSet.has(n.id);
-          const rating = Number(n.rating || 0);
-          const isHighlighted = highlightId === n.id;
-          return (
-            <motion.div
-              id={`note-card-${n.id}`}
-              key={n.id}
-              variants={animItem}
-              className={`card-elevated overflow-hidden ${isHighlighted ? "ring-2 ring-primary/40" : ""}`}
-            >
-              <div className="p-5">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-accent" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground text-[15px]">{n.course_name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
-                          {n.course_description}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1.5 font-medium">
-                          by <UserName userId={n.author_id} />
-                          {n.semester ? ` · ${n.semester}` : ""}
-                          {n.prof_name ? ` · ${n.prof_name}` : ""}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          bookmarkMutation.mutate({ noteId: n.id, nextMarked: !isMarked });
-                        }}
-                        className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
-                          isMarked ? "text-primary" : "text-muted-foreground hover:text-primary"
-                        }`}
-                        title={isMarked ? "Remove bookmark" : "Bookmark"}
-                      >
-                        <Bookmark className="w-4 h-4" fill={isMarked ? "currentColor" : "none"} />
-                      </button>
-                    </div>
+<motion.div
+  variants={animContainer}
+  initial="hidden"
+  animate="show"
+  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+>
+  {notes.map((n) => {
+    const isMarked = markedSet.has(n.id);
+    const rating = Number(n.rating || 0);
+    const isHighlighted = highlightId === n.id;
 
-                    <div className="flex items-center gap-3 mt-3.5 pt-3 border-t border-border/50 flex-wrap">
-                      <motion.button
-                        whileTap={{ scale: 0.85 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          voteMutation.mutate({ noteId: n.id, voteType: 1 });
-                        }}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
-                      >
-                        <ThumbsUp
-                                                className="w-4 h-4"
-                                                fill={voteType === 1 ? "currentColor" : "none"}
-                                              /> {rating}
-                      </motion.button>
-                      <motion.button
-                        whileTap={{ scale: 0.85 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          voteMutation.mutate({ noteId: n.id, voteType: -1 });
-                        }}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
-                      >
-                          <ThumbsDown
-                                                className="w-4 h-4"
-                                                fill={voteType === -1 ? "currentColor" : "none"}
-                                              />
-                      </motion.button>
-                      <a
-                        href={n.pdf}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors ml-auto no-underline font-medium"
-                        title="Open PDF"
-                      >
-                        <Download className="w-3.5 h-3.5" /> Open
-                      </a>
-                    </div>
-                  </div>
+    const userVote = voteMap[n.id] || 0;
+
+    return (
+      <motion.div
+        id={`note-card-${n.id}`}
+        key={n.id}
+        variants={animItem}
+        className={`card-elevated overflow-hidden ${
+          isHighlighted ? "ring-2 ring-primary/40" : ""
+        }`}
+      >
+        <div className="p-5">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 text-accent" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-foreground text-[15px]">
+                    {n.course_name}
+                  </h3>
+
+                  <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
+                    {n.course_description}
+                  </p>
+
+                  <p className="text-xs text-muted-foreground mt-1.5 font-medium">
+                    by <UserName userId={n.author_id} />
+                    {n.semester ? ` · ${n.semester}` : ""}
+                    {n.prof_name ? ` · ${n.prof_name}` : ""}
+                  </p>
                 </div>
+
+                {/* Bookmark */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bookmarkMutation.mutate({
+                      noteId: n.id,
+                      nextMarked: !isMarked,
+                    });
+                  }}
+                  className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
+                    isMarked
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-primary"
+                  }`}
+                  title={isMarked ? "Remove bookmark" : "Bookmark"}
+                >
+                  <Bookmark
+                    className="w-4 h-4"
+                    fill={isMarked ? "currentColor" : "none"}
+                  />
+                </button>
               </div>
-            </motion.div>
-          );
-        })}
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 mt-3.5 pt-3 border-t border-border/50 flex-wrap">
+                
+                {/* Like */}
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+
+                    const next =
+                      userVote === 1 ? 0 : 1;
+
+                    voteMutation.mutate({
+                      noteId: n.id,
+                      voteType: next,
+                    });
+
+                    setVoteMap((prev) => ({
+                      ...prev,
+                      [n.id]: next,
+                    }));
+                  }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
+                >
+                  <ThumbsUp
+                    className="w-4 h-4"
+                    fill={userVote === 1 ? "currentColor" : "none"}
+                  />
+                  {rating}
+                </motion.button>
+
+                {/* Dislike */}
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+
+                    const next =
+                      userVote === -1 ? 0 : -1;
+
+                    voteMutation.mutate({
+                      noteId: n.id,
+                      voteType: next,
+                    });
+
+                    setVoteMap((prev) => ({
+                      ...prev,
+                      [n.id]: next,
+                    }));
+                  }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
+                >
+                  <ThumbsDown
+                    className="w-4 h-4"
+                    fill={userVote === -1 ? "currentColor" : "none"}
+                  />
+                </motion.button>
+
+                {/* Open PDF */}
+                <a
+                  href={n.pdf}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors ml-auto no-underline font-medium"
+                  title="Open PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Open
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </motion.div>
+    );
+  })}
+</motion.div>
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
