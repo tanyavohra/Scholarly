@@ -82,7 +82,7 @@ const ProfilePage = () => {
           />
         </div>
         <div className="px-7 pb-7">
-          <div className="flex items-end gap-4 -mt-8 relative z-10">
+          <div className="flex items-end gap-4 -mt-10 relative z-10">
             <div
               className="rounded-2xl bg-primary flex items-center justify-center shadow-lg border-4 border-card"
               style={{ width: 76, height: 76, boxShadow: "0 4px 16px hsl(245 58% 56% / 0.3)" }}
