@@ -249,7 +249,7 @@ const NotesPage = () => {
                         }`}
                         title={isMarked ? "Remove bookmark" : "Bookmark"}
                       >
-                        <Bookmark className="w-4 h-4" />
+                        <Bookmark className="w-4 h-4" fill={isMarked ? "currentColor" : "none"} />
                       </button>
                     </div>
 
@@ -262,7 +262,10 @@ const NotesPage = () => {
                         }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
                       >
-                        <ThumbsUp className="w-3.5 h-3.5" /> {rating}
+                        <ThumbsUp
+                                                className="w-4 h-4"
+                                                fill={myVote === 1 ? "currentColor" : "none"}
+                                              /> {rating}
                       </motion.button>
                       <motion.button
                         whileTap={{ scale: 0.85 }}
@@ -272,7 +275,10 @@ const NotesPage = () => {
                         }}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
                       >
-                        <ThumbsDown className="w-3.5 h-3.5" />
+                          <ThumbsDown
+                                                className="w-4 h-4"
+                                                fill={myVote === -1 ? "currentColor" : "none"}
+                                              />
                       </motion.button>
                       <a
                         href={n.pdf}
