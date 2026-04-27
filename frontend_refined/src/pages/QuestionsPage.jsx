@@ -335,9 +335,16 @@ const QuestionsPage = () => {
                         {q.title}
                       </h3>
                       {q.image_url && (
-                        <span className="px-2 py-0.5 rounded-md bg-accent/10 text-accent text-[10px] font-semibold flex items-center gap-1">
-                          <ImageIcon className="w-3 h-3" /> img
-                        </span>
+                        <a
+                          href={q.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-2 py-0.5 rounded-md bg-accent/10 text-accent text-[10px] font-semibold flex items-center gap-1 hover:bg-accent/15 transition-colors"
+                          title="Open attached image"
+                        >
+                          <ImageIcon className="w-3 h-3" /> Image
+                        </a>
                       )}
 
                       <button
@@ -374,6 +381,23 @@ const QuestionsPage = () => {
                           {tag}
                         </span>
                       ))}
+                      {q.image_url && (
+                        <a
+                          href={q.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="ml-auto shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-border hover:border-primary/40 transition-colors bg-muted/30"
+                          title="Open attached image"
+                        >
+                          <img
+                            src={q.image_url}
+                            alt="Question attachment"
+                            loading="lazy"
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
