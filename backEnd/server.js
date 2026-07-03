@@ -5,7 +5,6 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const cookiesParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
-const { connectStorageEmulator } = require("firebase/storage");
 const fs = require('fs');
 const { Poppler } = require('node-poppler');
 const poppler = new Poppler();
@@ -15,7 +14,6 @@ app.disable("etag");
 const axios = require('axios');
 const bcrypt = require('bcrypt');
 const { generateThumbnail } = require('pdf-thumbnail');
-const { Blob } = require('buffer');
 const multer = require('multer');
 const mongoose = require("mongoose");
 
@@ -458,46 +456,6 @@ async function updateToken(email, token) {
   await User.updateOne({ email }, { $set: { token } });
 }
 
-// app.post("/login", (req, res) => {
-//   const sql = "SELECT * FROM users WHERE email = ? AND password = ?";
-//   const values = [req.body.email, req.body.password];
-//   db.query(sql, [req.body.email, req.body.password], (err, data) => {
-//     if (err) {
-//       console.log(err + "H");
-//       return res.json("Error");
-//     }
-//     if (data.length > 0) {
-//       // console.log("Done");
-//       // return res.json("Login Done!");
-//       const name = data[0].name;
-//       const token = jwt.sign({ name }, "secret-key", { expiresIn: "1d" });
-//       res.cookie("token", token);
-
-//       updateToken(values[0], token);
-
-//       //const sql2 = "UPDATE users SET token=? where email=?";
-
-//       // const otherValues=[
-//       //     token,
-//       //     values[0]
-//       // ];
-//       // console.log(otherValues)
-//       // db.query(sql2, [token, values[0]], (err, data) =>{
-//       //     //console.log(values);
-//       //     if(err){
-//       //         console.log(err + "H");
-//       //         return res.json("Error");
-//       //     }
-//       //     console.log(data + "H");
-//       //     return res.json(data);
-//       // });
-//       return res.json({ Status: "Success" });
-//     } else {
-//       console.log(data);
-//       return res.json({ Message: "No Record... Signup!" });
-//     }
-//   });
-// });
 app.post("/login", async (req, res) => {
   const values = [req.body.email];
   try {

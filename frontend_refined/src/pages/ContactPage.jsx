@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, MapPin, Phone, Send } from "lucide-react";
 import { api } from "@/lib/api.js";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/lib/toast.jsx";
 
 const animItem = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.35 } } };
 const animContainer = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };

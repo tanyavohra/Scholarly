@@ -130,4 +130,38 @@
   .glass-panel {
     @apply bg-card/80 backdrop-blur-md border border-border/40;
   }
+
+  .toast-popup {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    max-width: 22rem;
+    padding: 1rem 1.25rem;
+    border-radius: 0.875rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    animation: fade-up 0.3s ease-out forwards;
+  }
+
+  .toast-info {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+  }
+
+  .toast-error {
+    background: hsl(var(--destructive));
+    color: hsl(var(--destructive-foreground));
+  }
+
+  .toast-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .toast-desc {
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+    opacity: 0.9;
+  }
 }

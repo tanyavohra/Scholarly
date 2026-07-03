@@ -4,7 +4,7 @@ import { Send, ImagePlus, X, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api.js";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload.js";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/lib/toast.jsx";
 
 const AskPage = () => {
   const navigate = useNavigate();

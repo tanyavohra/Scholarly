@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Send, FileUp, Sparkles, Loader2 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { api, ApiError } from "@/lib/api.js";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/lib/toast.jsx";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

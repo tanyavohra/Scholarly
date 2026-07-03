@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { api } from "@/lib/api.js";
 
@@ -36,47 +36,44 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-  const value = useMemo(
-    () => ({
-      user,
-      loading,
-      refresh,
-      async login({ email, password }) {
-        const res = await api.post("/login", { email, password });
-        if (res?.Status !== "Success") {
-          const message = res?.Message || res?.error || (typeof res === "string" ? res : "") || "Invalid credentials";
-          throw new Error(String(message));
-        }
-        await refresh();
-      },
-      async signup({ name, email, password }) {
-        const res = await api.post("/signup", { name, email, password });
-        if (res?.Status !== "Success") {
-          const message =
-            res?.Message || res?.error || (typeof res === "string" ? res : "") || "Unable to create account";
-          throw new Error(String(message));
-        }
-        const loginRes = await api.post("/login", { email, password });
-        if (loginRes?.Status !== "Success") {
-          const message =
-            loginRes?.Message ||
-            loginRes?.error ||
-            (typeof loginRes === "string" ? loginRes : "") ||
-            "Unable to sign in";
-          throw new Error(String(message));
-        }
-        await refresh();
-      },
-      async logout() {
-        try {
-          await api.get("/logout");
-        } finally {
-          setUser(null);
-        }
-      },
-    }),
-    [user, loading],
-  );
+  const value = {
+    user,
+    loading,
+    refresh,
+    async login({ email, password }) {
+      const res = await api.post("/login", { email, password });
+      if (res?.Status !== "Success") {
+        const message = res?.Message || res?.error || (typeof res === "string" ? res : "") || "Invalid credentials";
+        throw new Error(String(message));
+      }
+      await refresh();
+    },
+    async signup({ name, email, password }) {
+      const res = await api.post("/signup", { name, email, password });
+      if (res?.Status !== "Success") {
+        const message =
+          res?.Message || res?.error || (typeof res === "string" ? res : "") || "Unable to create account";
+        throw new Error(String(message));
+      }
+      const loginRes = await api.post("/login", { email, password });
+      if (loginRes?.Status !== "Success") {
+        const message =
+          loginRes?.Message ||
+          loginRes?.error ||
+          (typeof loginRes === "string" ? loginRes : "") ||
+          "Unable to sign in";
+        throw new Error(String(message));
+      }
+      await refresh();
+    },
+    async logout() {
+      try {
+        await api.get("/logout");
+      } finally {
+        setUser(null);
+      }
+    },
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

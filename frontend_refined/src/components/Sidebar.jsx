@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Home, HelpCircle, FileText, PlusCircle, Bookmark, User, MessageSquare, LogOut, Compass, Mail, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/lib/auth.jsx";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/lib/toast.jsx";
 
 const navItems = [
   { to: "/home", icon: Home, label: "Home" },

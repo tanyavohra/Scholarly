@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api.js";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload.js";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/lib/toast.jsx";
 
 const animItem = {
   hidden: { opacity: 0, y: 12 },

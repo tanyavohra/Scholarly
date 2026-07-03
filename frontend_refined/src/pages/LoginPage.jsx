@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Users, FileText, MessageSquare, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth.jsx";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/lib/toast.jsx";
 
 const LoginPage = () => {
   const navigate = useNavigate();
