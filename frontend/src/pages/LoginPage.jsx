@@ -75,37 +75,36 @@ const LoginPage = () => {
   ];
 
   return (
-    <div className="min-h-screen flex" style={{ background: "linear-gradient(160deg, hsl(248 30% 96%) 0%, hsl(220 20% 97%) 40%, hsl(132 74% 91%) 100%)" }}>
+    <div className="d-flex min-vh-100" style={{ background: "linear-gradient(160deg, hsl(248 30% 96%) 0%, hsl(220 20% 97%) 40%, hsl(132 74% 91%) 100%)" }}>
       {/* Left — Branding */}
-      <div className="hidden lg:flex flex-col justify-center w-1/2 p-16">
+      <div className="d-none d-lg-flex flex-column justify-content-center w-50 p-16">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center"
-              style={{ boxShadow: '0 4px 16px hsl(245 58% 56% / 0.3)' }}>
-              <img src="/book.png" alt="Scholarly" className="w-7 h-7 object-contain" />
+          <div className="d-flex align-items-center gap-3 mb-10">
+            <div className="d-flex align-items-center justify-content-center rounded-4 bg-primary"
+              style={{ width: "3rem", height: "3rem", boxShadow: "0 4px 16px hsl(245 58% 56% / 0.3)" }}>
+              <img src="/book.png" alt="Scholarly" className="w-7" style={{ height: "1.75rem", objectFit: "contain" }} />
             </div>
-            <span className="text-2xl font-bold text-foreground">Scholarly</span>
+            <span className="fs-2 fw-bold text-foreground">Scholarly</span>
           </div>
 
-          <h1 className="text-5xl font-bold text-foreground leading-[1.15] mb-4">
-            Connecting
-            <br />
-            <span className="gradient-text">minds.</span>
+          <h1 className="display-3 fw-bold text-foreground mb-3" style={{ lineHeight: 1.15 }}>
+            Connecting<br /><span className="gradient-text">minds.</span>
           </h1>
-          <p className="text-muted-foreground text-base leading-relaxed max-w-md mb-10">
+          <p className="text-muted-foreground mb-10" style={{ maxWidth: "28rem", fontSize: "1rem", lineHeight: 1.625 }}>
             The collaborative platform where students ask questions, share notes, and help each other excel.
           </p>
 
-          <div className="space-y-4">
+          <div className="d-flex flex-column gap-3">
             {features.map((f, i) => (
               <motion.div key={i} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i * 0.12 }}
-                className="flex items-center gap-4 p-4 rounded-2xl bg-card/60 backdrop-blur-sm border border-border/40">
-                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <f.icon className="w-5 h-5 text-primary" />
+                className="d-flex align-items-center gap-4 p-4 rounded-4 bg-card-60 border border-border" style={{ backdropFilter: "blur(4px)" }}>
+                <div className="d-flex align-items-center justify-content-center rounded-3 bg-primary-10 flex-shrink-0"
+                  style={{ width: "2.75rem", height: "2.75rem" }}>
+                  <f.icon className="text-primary" style={{ width: "1.25rem", height: "1.25rem" }} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{f.text}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{f.desc}</p>
+                  <p className="small fw-semibold text-foreground mb-0">{f.text}</p>
+                  <p className="text-muted-foreground" style={{ fontSize: "0.75rem", marginTop: "0.125rem" }}>{f.desc}</p>
                 </div>
               </motion.div>
             ))}
@@ -114,92 +113,93 @@ const LoginPage = () => {
       </div>
 
       {/* Right — Form */}
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="flex-grow-1 d-flex align-items-center justify-content-center p-4">
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-          className="w-full max-w-md">
-          <div className="card-elevated p-8 rounded-3xl">
-            <div className="flex lg:hidden items-center gap-2.5 mb-8 justify-center">
-              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-                <img src="/book.png" alt="Scholarly" className="w-5 h-5 object-contain" />
+          style={{ maxWidth: "28rem", width: "100%" }}>
+          <div className="card-elevated p-8" style={{ borderRadius: "1.5rem" }}>
+            <div className="d-lg-none d-flex align-items-center gap-2 mb-8 justify-content-center">
+              <div className="d-flex align-items-center justify-content-center rounded-3 bg-primary"
+                style={{ width: "2.25rem", height: "2.25rem" }}>
+                <img src="/book.png" alt="Scholarly" style={{ width: "1.25rem", height: "1.25rem", objectFit: "contain" }} />
               </div>
-              <span className="text-lg font-bold text-foreground">Scholarly</span>
+              <span className="fw-bold text-foreground" style={{ fontSize: "1.125rem" }}>Scholarly</span>
             </div>
 
             {!isSignup ? (
-              <form onSubmit={handleLoginSubmit} className="space-y-5">
-                <div className="text-center lg:text-left">
-                  <div className="flex items-center gap-2 justify-center lg:justify-start mb-2">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                    <span className="text-xs font-semibold text-primary uppercase tracking-wider">Welcome back</span>
+              <form onSubmit={handleLoginSubmit} className="d-flex flex-column gap-4">
+                <div className="text-center text-lg-start">
+                  <div className="d-flex align-items-center gap-2 justify-content-center justify-content-lg-start mb-2">
+                    <Sparkles className="text-primary" style={{ width: "1.25rem", height: "1.25rem" }} />
+                    <span className="small fw-semibold text-primary text-uppercase tracking-wider">Welcome back</span>
                   </div>
-                  <h2 className="text-2xl font-bold text-foreground">Sign in to continue</h2>
-                  <p className="text-muted-foreground text-sm mt-1.5">Pick up where you left off</p>
+                  <h2 className="fs-2 fw-bold text-foreground">Sign in to continue</h2>
+                  <p className="text-muted-foreground mt-1" style={{ fontSize: "0.875rem" }}>Pick up where you left off</p>
                 </div>
-                <div className="space-y-3">
+                <div className="d-flex flex-column gap-2">
                   <div>
-                    <label className="block text-xs font-semibold text-foreground mb-1.5">Email</label>
+                    <label className="d-block small fw-semibold text-foreground mb-1">Email</label>
                     <input type="email" placeholder="you@university.edu" value={loginValues.email}
                       onChange={e => setLoginValues(v => ({ ...v, email: e.target.value }))} className="input-styled" />
-                    {errors.email && <p className="text-destructive text-xs mt-1.5 ml-1">{errors.email}</p>}
+                    {errors.email && <p className="text-destructive mt-1 ms-1" style={{ fontSize: "0.75rem" }}>{errors.email}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-foreground mb-1.5">Password</label>
+                    <label className="d-block small fw-semibold text-foreground mb-1">Password</label>
                     <input type="password" placeholder="••••••••" value={loginValues.password}
                       onChange={e => setLoginValues(v => ({ ...v, password: e.target.value }))} className="input-styled" />
-                    {errors.password && <p className="text-destructive text-xs mt-1.5 ml-1">{errors.password}</p>}
+                    {errors.password && <p className="text-destructive mt-1 ms-1" style={{ fontSize: "0.75rem" }}>{errors.password}</p>}
                   </div>
                 </div>
                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} type="submit"
                   disabled={submitting}
-                  className="btn-primary w-full flex items-center justify-center gap-2 border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-                  {submitting ? "Signing in..." : "Sign in"} <ArrowRight className="w-4 h-4" />
+                  className="btn-primary-custom w-100 d-flex align-items-center justify-content-center gap-2">
+                  {submitting ? "Signing in..." : "Sign in"} <ArrowRight style={{ width: "1rem", height: "1rem" }} />
                 </motion.button>
-                <p className="text-center text-sm text-muted-foreground">
+                <p className="text-center small text-muted-foreground mb-0">
                   New here?{" "}
                   <button type="button" onClick={() => { setIsSignup(true); setErrors({}); }}
-                    className="text-primary font-semibold hover:underline bg-transparent border-0 p-0 cursor-pointer">Create an account</button>
+                    className="text-primary fw-semibold bg-transparent border-0 p-0" style={{ cursor: "pointer", textDecoration: "underline" }}>Create an account</button>
                 </p>
               </form>
             ) : (
-              <form onSubmit={handleSignupSubmit} className="space-y-4">
-                <div className="text-center lg:text-left">
-                  <h2 className="text-2xl font-bold text-foreground">Create your account</h2>
-                  <p className="text-muted-foreground text-sm mt-1.5">Join thousands of learners today</p>
+              <form onSubmit={handleSignupSubmit} className="d-flex flex-column gap-3">
+                <div className="text-center text-lg-start">
+                  <h2 className="fs-2 fw-bold text-foreground">Create your account</h2>
+                  <p className="text-muted-foreground mt-1" style={{ fontSize: "0.875rem" }}>Join thousands of learners today</p>
                 </div>
-                <div className="space-y-3">
+                <div className="d-flex flex-column gap-2">
                   <div>
-                    <label className="block text-xs font-semibold text-foreground mb-1.5">Full name</label>
+                    <label className="d-block small fw-semibold text-foreground mb-1">Full name</label>
                     <input type="text" placeholder="Jane Smith" value={signupValues.name}
                       onChange={e => setSignupValues(v => ({ ...v, name: e.target.value }))} className="input-styled" />
-                    {errors.name && <p className="text-destructive text-xs mt-1.5 ml-1">{errors.name}</p>}
+                    {errors.name && <p className="text-destructive mt-1 ms-1" style={{ fontSize: "0.75rem" }}>{errors.name}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-foreground mb-1.5">Email</label>
+                    <label className="d-block small fw-semibold text-foreground mb-1">Email</label>
                     <input type="email" placeholder="you@university.edu" value={signupValues.email}
                       onChange={e => setSignupValues(v => ({ ...v, email: e.target.value }))} className="input-styled" />
-                    {errors.email && <p className="text-destructive text-xs mt-1.5 ml-1">{errors.email}</p>}
+                    {errors.email && <p className="text-destructive mt-1 ms-1" style={{ fontSize: "0.75rem" }}>{errors.email}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-foreground mb-1.5">Password</label>
+                    <label className="d-block small fw-semibold text-foreground mb-1">Password</label>
                     <input type="password" placeholder="••••••••" value={signupValues.password}
                       onChange={e => setSignupValues(v => ({ ...v, password: e.target.value }))} className="input-styled" />
-                    {errors.password && <p className="text-destructive text-xs mt-1.5 ml-1">{errors.password}</p>}
+                    {errors.password && <p className="text-destructive mt-1 ms-1" style={{ fontSize: "0.75rem" }}>{errors.password}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-foreground mb-1.5">Confirm password</label>
+                    <label className="d-block small fw-semibold text-foreground mb-1">Confirm password</label>
                     <input type="password" placeholder="••••••••" value={signupValues.confpass}
                       onChange={e => setSignupValues(v => ({ ...v, confpass: e.target.value }))} className="input-styled" />
-                    {errors.confpass && <p className="text-destructive text-xs mt-1.5 ml-1">{errors.confpass}</p>}
+                    {errors.confpass && <p className="text-destructive mt-1 ms-1" style={{ fontSize: "0.75rem" }}>{errors.confpass}</p>}
                   </div>
                 </div>
                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} type="submit"
                   disabled={submitting}
-                  className="btn-primary w-full flex items-center justify-center gap-2 border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-                  {submitting ? "Creating..." : "Create account"} <ArrowRight className="w-4 h-4" />
+                  className="btn-primary-custom w-100 d-flex align-items-center justify-content-center gap-2">
+                  {submitting ? "Creating..." : "Create account"} <ArrowRight style={{ width: "1rem", height: "1rem" }} />
                 </motion.button>
-                <p className="text-center text-sm">
+                <p className="text-center small mb-0">
                   <button type="button" onClick={() => { setIsSignup(false); setErrors({}); }}
-                    className="text-muted-foreground hover:text-foreground transition-colors bg-transparent border-0 p-0 cursor-pointer">← Back to sign in</button>
+                    className="text-muted-foreground hover-text-foreground bg-transparent border-0 p-0" style={{ cursor: "pointer" }}>← Back to sign in</button>
                 </p>
               </form>
             )}

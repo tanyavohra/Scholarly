@@ -19,23 +19,24 @@ const Topbar = () => {
   };
 
   return (
-    <header className="h-16 glass-panel border-b border-border/40 flex items-center justify-between px-6 sticky top-0 z-10">
-      <div className="flex items-center gap-3 flex-1 max-w-lg">
-        <div className="flex items-center gap-2.5 flex-1 px-4 py-2.5 rounded-xl bg-muted/40 border border-transparent focus-within:border-primary/20 focus-within:bg-card transition-all">
-          <Search className="w-4 h-4 text-muted-foreground/60" />
+    <header className="h-16 glass-panel border-bottom border-border d-flex align-items-center justify-content-between px-6 sticky-top" style={{ zIndex: 10 }}>
+      <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ maxWidth: "32rem" }}>
+        <div className="search-bar">
+          <Search className="flex-shrink-0 text-muted-foreground" style={{ width: "1rem", height: "1rem", opacity: 0.6 }} />
           <input
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             placeholder="Search questions..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none" />
+            className="search-input"
+          />
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <Link to="/profile" className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-sm no-underline"
-          style={{ boxShadow: '0 2px 8px hsl(245 58% 56% / 0.2)' }}>
-          <User className="w-4 h-4" />
+      <div className="d-flex align-items-center gap-3">
+        <Link to="/profile" className="d-flex align-items-center justify-content-center text-decoration-none rounded-3 bg-primary text-primary-foreground shadow-sm"
+          style={{ width: "2.25rem", height: "2.25rem", boxShadow: "0 2px 8px hsl(245 58% 56% / 0.2)" }}>
+          <User style={{ width: "1rem", height: "1rem" }} />
         </Link>
       </div>
     </header>

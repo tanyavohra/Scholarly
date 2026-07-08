@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-// Simple toast notifications — no external UI library needed.
 const listeners = [];
 
 export function toast({ title, description, variant }) {

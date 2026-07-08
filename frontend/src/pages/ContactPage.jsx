@@ -21,7 +21,7 @@ const ContactPage = () => {
           res?.Message || res?.error || (typeof res === "string" ? res : "") || "Failed to submit message.";
         throw new Error(String(message));
       }
-      toast({ title: "Sent", description: "Thanks — we’ll get back to you soon." });
+      toast({ title: "Sent", description: "Thanks — we'll get back to you soon." });
       setForm({ name: "", email: "", subject: "", message: "" });
     } catch (err) {
       toast({
@@ -35,72 +35,78 @@ const ContactPage = () => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-foreground mb-1">Contact Us</h1>
-      <p className="text-sm text-muted-foreground mb-6 max-w-lg">Have a question or feedback? We'd love to hear from you.</p>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <motion.div variants={animContainer} initial="hidden" animate="show" className="space-y-3">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto" style={{ maxWidth: "64rem" }}>
+      <h1 className="fs-3 fw-bold text-foreground mb-1">Contact Us</h1>
+      <p className="small text-muted-foreground mb-4" style={{ maxWidth: "32rem" }}>Have a question or feedback? We'd love to hear from you.</p>
+      <div className="row g-3">
+        <motion.div variants={animContainer} initial="hidden" animate="show" className="col-lg-4 d-flex flex-column gap-2">
           {[
-            { icon: Mail, label: "Email", value: "vohratanya5@gmail.com", color: "text-primary", bg: "bg-primary/10" },
-            { icon: MapPin, label: "Location", value: "Jaipur,Rajasthan", color: "text-accent", bg: "bg-accent/10" },
-            { icon: Phone, label: "Linkedin", value: "www.linkedin.com/in/tanya-vohra", color: "text-scholarly-amethyst", bg: "bg-scholarly-amethyst/10" },
+            { icon: Mail, label: "Email", value: "vohratanya5@gmail.com", color: "text-primary", bg: "bg-primary-10" },
+            { icon: MapPin, label: "Location", value: "Jaipur,Rajasthan", color: "text-accent", bg: "bg-accent-10" },
+            { icon: Phone, label: "Linkedin", value: "www.linkedin.com/in/tanya-vohra", color: "text-scholarly-amethyst", bg: "bg-scholarly-amethyst-10" },
           ].map(c => (
-            <motion.div key={c.label} variants={animItem} className="card-elevated p-5">
-              <div className="flex items-center gap-3.5">
-                <div className={`w-11 h-11 rounded-xl ${c.bg} flex items-center justify-center`}>
-                  <c.icon className={`w-5 h-5 ${c.color}`} />
+            <motion.div key={c.label} variants={animItem} className="card-elevated p-4">
+              <div className="d-flex align-items-center gap-3">
+                <div className={`d-flex align-items-center justify-content-center rounded-3 ${c.bg}`}
+                  style={{ width: "2.75rem", height: "2.75rem" }}>
+                  <c.icon className={`flex-shrink-0 ${c.color}`} style={{ width: "1.25rem", height: "1.25rem" }} />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium">{c.label}</p>
-                  <p className="text-sm font-semibold text-foreground">{c.value}</p>
+                  <p className="text-muted-foreground fw-medium mb-0" style={{ fontSize: "0.75rem" }}>{c.label}</p>
+                  <p className="fw-semibold text-foreground mb-0" style={{ fontSize: "0.875rem" }}>{c.value}</p>
                 </div>
               </div>
             </motion.div>
           ))}
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="lg:col-span-2 card-elevated p-7">
-          <h2 className="text-lg font-bold text-foreground mb-1">Send a Message</h2>
-          <p className="text-xs text-muted-foreground mb-6">We'll get back to you within 24 hours.</p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-2">Name</label>
-                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" className="input-styled" />
+          className="col-lg-8">
+          <div className="card-elevated p-6">
+            <h2 className="fw-bold text-foreground mb-1" style={{ fontSize: "1.125rem" }}>Send a Message</h2>
+            <p className="text-muted-foreground mb-4" style={{ fontSize: "0.75rem" }}>We'll get back to you within 24 hours.</p>
+            <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+              <div className="row g-3">
+                <div className="col-sm-6">
+                  <label className="d-block small fw-semibold text-foreground mb-2">Name</label>
+                  <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" className="input-styled" />
+                </div>
+                <div className="col-sm-6">
+                  <label className="d-block small fw-semibold text-foreground mb-2">Email</label>
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="your@email.com" className="input-styled" />
+                </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-2">Email</label>
-                <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="your@email.com" className="input-styled" />
+                <label className="d-block small fw-semibold text-foreground mb-2">Subject</label>
+                <input type="text" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="What's this about?" className="input-styled" />
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-2">Subject</label>
-              <input type="text" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="What's this about?" className="input-styled" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-2">Message</label>
-              <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} placeholder="Tell us more..." rows={5} className="input-styled resize-none" />
-            </div>
-            <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} type="submit"
-              disabled={submitting}
-              className="btn-primary flex items-center gap-2 border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-              <Send className="w-4 h-4" /> {submitting ? "Sending..." : "Send Message"}
-            </motion.button>
-          </form>
+              <div>
+                <label className="d-block small fw-semibold text-foreground mb-2">Message</label>
+                <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} placeholder="Tell us more..." rows={5} className="input-styled resize-none" />
+              </div>
+              <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} type="submit"
+                disabled={submitting}
+                className="btn-primary-custom d-inline-flex align-items-center gap-2 border-0"
+                style={{ alignSelf: "flex-start" }}>
+                <Send style={{ width: "1rem", height: "1rem" }} /> {submitting ? "Sending..." : "Send Message"}
+              </motion.button>
+            </form>
+          </div>
         </motion.div>
       </div>
-      <div className="mt-8">
-        <h2 className="text-lg font-bold text-foreground mb-4">Frequently Asked Questions</h2>
-        <motion.div variants={animContainer} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="mt-4">
+        <h2 className="fw-bold text-foreground mb-3" style={{ fontSize: "1.125rem" }}>Frequently Asked Questions</h2>
+        <motion.div variants={animContainer} initial="hidden" animate="show" className="row row-cols-1 row-cols-md-2 g-2">
           {[
             { q: "How do I post a question?", a: "Navigate to 'Ask Question' from the sidebar, fill in the details, and hit post!" },
             { q: "Can I upload images with questions?", a: "Yes! You can attach images to your questions for better context." },
             { q: "Is Scholarly free to use?", a: "Absolutely. Scholarly is free for all students and educators." },
             { q: "How can I contribute notes?", a: "Go to the Notes section and click 'Add Note' to share your study materials." },
           ].map((faq, i) => (
-            <motion.div key={i} variants={animItem} className="card-elevated p-5">
-              <h3 className="font-semibold text-foreground text-sm mb-2">{faq.q}</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">{faq.a}</p>
+            <motion.div key={i} variants={animItem} className="col">
+              <div className="card-elevated p-4 h-100">
+                <h3 className="fw-semibold text-foreground small mb-2">{faq.q}</h3>
+                <p className="text-muted-foreground mb-0" style={{ fontSize: "0.75rem", lineHeight: 1.625 }}>{faq.a}</p>
+              </div>
             </motion.div>
           ))}
         </motion.div>

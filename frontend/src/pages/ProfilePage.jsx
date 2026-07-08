@@ -66,15 +66,16 @@ const ProfilePage = () => {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="max-w-4xl mx-auto"
+      className="mx-auto"
+      style={{ maxWidth: "56rem" }}
     >
-      <div className="card-elevated p-0 overflow-hidden">
+      <div className="card-elevated overflow-hidden">
         <div
-          className="h-28 relative"
+          className="h-28 position-relative"
           style={{ background: "linear-gradient(135deg, hsl(248 73% 59%), hsl(257 50% 65%))" }}
         >
           <div
-            className="absolute inset-0 opacity-10"
+            className="position-absolute top-0 start-0 w-100 h-100 opacity-10"
             style={{
               backgroundImage: "radial-gradient(circle at 70% 30%, white 1px, transparent 1px)",
               backgroundSize: "30px 30px",
@@ -82,92 +83,99 @@ const ProfilePage = () => {
           />
         </div>
         <div className="px-7 pb-7">
-          <div className="flex items-end gap-4 -mt-10 relative z-10">
+          <div className="d-flex align-items-end gap-3 negative-mt-10 position-relative" style={{ zIndex: 10 }}>
             <div
-              className="rounded-2xl bg-primary flex items-center justify-center shadow-lg border-4 border-card"
+              className="rounded-4 bg-primary d-flex align-items-center justify-content-center shadow-lg border-4 border-white"
               style={{ width: 76, height: 76, boxShadow: "0 4px 16px hsl(245 58% 56% / 0.3)" }}
             >
-              <User className="w-8 h-8 text-primary-foreground" />
+              <User className="text-primary-foreground" style={{ width: "2rem", height: "2rem" }} />
             </div>
-            <div className="flex-1 pb-1">
-              <h1 className="text-xl font-bold text-foreground">{user?.name || "Profile"}</h1>
-              <p className="text-sm text-muted-foreground">{user?.email || ""}</p>
+            <div className="flex-grow-1 pb-1">
+              <h1 className="fs-4 fw-bold text-foreground">{user?.name || "Profile"}</h1>
+              <p className="small text-muted-foreground mb-0">{user?.email || ""}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mt-6">
+          <div className="row g-2 mt-4">
             {[
-              { icon: HelpCircle, label: "Questions", value: String(stats.q), color: "text-primary", bg: "bg-primary/8" },
-              { icon: FileText, label: "Notes", value: String(stats.n), color: "text-accent", bg: "bg-accent/8" },
-              { icon: ThumbsUp, label: "Likes", value: String(stats.likes), color: "text-scholarly-amethyst", bg: "bg-scholarly-amethyst/8" },
+              { icon: HelpCircle, label: "Questions", value: String(stats.q), color: "text-primary", bg: "bg-primary-10" },
+              { icon: FileText, label: "Notes", value: String(stats.n), color: "text-accent", bg: "bg-accent-10" },
+              { icon: ThumbsUp, label: "Likes", value: String(stats.likes), color: "text-scholarly-amethyst", bg: "bg-scholarly-amethyst-8" },
             ].map((s) => (
-              <div key={s.label} className={`${s.bg} rounded-xl p-4 text-center`}>
-                <s.icon className={`w-5 h-5 ${s.color} mx-auto mb-1.5`} />
-                <div className="text-xl font-bold text-foreground">{s.value}</div>
-                <div className="text-[10px] text-muted-foreground font-medium">{s.label}</div>
+              <div key={s.label} className="col">
+                <div className={`${s.bg} rounded-3 p-3 text-center`}>
+                  <s.icon className={`flex-shrink-0 ${s.color} mx-auto mb-1`} style={{ width: "1.25rem", height: "1.25rem" }} />
+                  <div className="fs-5 fw-bold text-foreground">{s.value}</div>
+                  <div className="text-muted-foreground fw-medium" style={{ fontSize: "0.625rem" }}>{s.label}</div>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-5">
-        <div className="lg:col-span-2 card-elevated p-6">
-          <h2 className="font-bold text-foreground mb-4">Recent Activity</h2>
-          <div className="space-y-2">
-            {recentActivity.map((a, i) => (
-              <motion.div
-                key={`${a.type}-${a.id}`}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-start gap-3.5 p-3 rounded-xl hover:bg-muted/30 transition-colors"
-              >
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${a.type === "question" ? "bg-primary/10" : "bg-accent/10"}`}>
-                  {a.type === "question" ? (
-                    <HelpCircle className="w-4 h-4 text-primary" />
-                  ) : (
-                    <FileText className="w-4 h-4 text-accent" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">{a.title}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3" />
-                      {a.type}
-                    </span>
+      <div className="row g-3 mt-4">
+        <div className="col-lg-8">
+          <div className="card-elevated p-4">
+            <h2 className="fw-bold text-foreground mb-3">Recent Activity</h2>
+            <div className="d-flex flex-column gap-1">
+              {recentActivity.map((a, i) => (
+                <motion.div
+                  key={`${a.type}-${a.id}`}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="d-flex align-items-start gap-3 p-3 rounded-3 hover-muted-20"
+                >
+                  <div className={`d-flex align-items-center justify-content-center rounded-2 flex-shrink-0 ${a.type === "question" ? "bg-primary-10" : "bg-accent-10"}`}
+                    style={{ width: "2.25rem", height: "2.25rem" }}>
+                    {a.type === "question" ? (
+                      <HelpCircle className="text-primary" style={{ width: "1rem", height: "1rem" }} />
+                    ) : (
+                      <FileText className="text-accent" style={{ width: "1rem", height: "1rem" }} />
+                    )}
                   </div>
-                </div>
-              </motion.div>
-            ))}
-            {recentActivity.length === 0 && (
-              <div className="text-sm text-muted-foreground text-center py-6">No activity yet.</div>
-            )}
+                  <div className="flex-grow-1">
+                    <p className="small fw-medium text-foreground mb-0">{a.title}</p>
+                    <div className="d-flex align-items-center gap-3 mt-1 text-muted-foreground" style={{ fontSize: "0.75rem" }}>
+                      <span className="d-flex align-items-center gap-1">
+                        <MessageCircle style={{ width: "0.75rem", height: "0.75rem" }} />
+                        {a.type}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+              {recentActivity.length === 0 && (
+                <div className="small text-muted-foreground text-center py-4">No activity yet.</div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="card-elevated p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="w-4 h-4 text-scholarly-amethyst" />
-            <h2 className="font-bold text-foreground">Badges</h2>
-          </div>
-          <div className="space-y-3">
-            {badges.map((b, i) => (
-              <motion.div
-                key={b.name}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.06 }}
-                className="flex items-center gap-3 p-3 rounded-xl bg-muted/20"
-              >
-                <span className="text-xl">{b.icon}</span>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{b.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{b.desc}</p>
-                </div>
-              </motion.div>
-            ))}
+        <div className="col-lg-4">
+          <div className="card-elevated p-4">
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <Award className="text-scholarly-amethyst" style={{ width: "1rem", height: "1rem" }} />
+              <h2 className="fw-bold text-foreground mb-0" style={{ fontSize: "1.125rem" }}>Badges</h2>
+            </div>
+            <div className="d-flex flex-column gap-2">
+              {badges.map((b, i) => (
+                <motion.div
+                  key={b.name}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.06 }}
+                  className="d-flex align-items-center gap-3 p-3 rounded-3 bg-muted-20"
+                >
+                  <span style={{ fontSize: "1.25rem" }}>{b.icon}</span>
+                  <div>
+                    <p className="small fw-semibold text-foreground mb-0">{b.name}</p>
+                    <p className="text-muted-foreground mb-0" style={{ fontSize: "0.625rem" }}>{b.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

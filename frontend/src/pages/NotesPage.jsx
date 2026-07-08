@@ -6,7 +6,6 @@ import {
   ThumbsDown,
   Download,
   Plus,
-  MessageSquare,
   Bookmark,
   X,
 } from "lucide-react";
@@ -154,8 +153,7 @@ const NotesPage = () => {
   const openParam = String(searchParams.get("open") || "").trim();
   const openHandledRef = useRef(false);
   const [highlightId, setHighlightId] = useState(null);
-  const [voteMap, setVoteMap] = useState({}); // { noteId: 1 | -1 | 0 }
-
+  const [voteMap, setVoteMap] = useState({});
 
   useEffect(() => {
     if (!openParam) return;
@@ -179,196 +177,161 @@ const NotesPage = () => {
   }, [openParam, notesQuery.isLoading]);
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="mx-auto" style={{ maxWidth: "64rem" }}>
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between mb-6"
+        className="d-flex align-items-center justify-content-between mb-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Notes</h1>
-          <p className="text-sm text-muted-foreground mt-1">Community-shared study materials.</p>
+          <h1 className="fs-3 fw-bold text-foreground">Notes</h1>
+          <p className="small text-muted-foreground mt-1">Community-shared study materials.</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setShowAdd(true)}
-          className="btn-primary flex items-center gap-2 border-0 cursor-pointer"
+          className="btn-primary-custom d-flex align-items-center gap-2 border-0 cursor-pointer"
         >
-          <Plus className="w-4 h-4" /> Add Note
+          <Plus style={{ width: "1rem", height: "1rem" }} /> Add Note
         </motion.button>
       </motion.div>
 
       {notesQuery.isLoading && (
-        <div className="card-elevated p-6 text-sm text-muted-foreground">Loading notes...</div>
+        <div className="card-elevated p-4 small text-muted-foreground">Loading notes...</div>
       )}
       {notesQuery.error && (
-        <div className="card-elevated p-6 text-sm text-destructive">Failed to load notes.</div>
+        <div className="card-elevated p-4 small text-destructive">Failed to load notes.</div>
       )}
 
-<motion.div
-  variants={animContainer}
-  initial="hidden"
-  animate="show"
-  className="grid grid-cols-1 md:grid-cols-2 gap-4"
->
-  {notes.map((n) => {
-    const isMarked = markedSet.has(n.id);
-    const rating = Number(n.rating || 0);
-    const isHighlighted = highlightId === n.id;
-
-    const userVote = voteMap[n.id] || 0;
-
-    return (
       <motion.div
-        id={`note-card-${n.id}`}
-        key={n.id}
-        variants={animItem}
-        className={`card-elevated overflow-hidden ${
-          isHighlighted ? "ring-2 ring-primary/40" : ""
-        }`}
+        variants={animContainer}
+        initial="hidden"
+        animate="show"
+        className="row row-cols-1 row-cols-md-2 g-3"
       >
-        <div className="p-5">
-          <div className="flex items-start gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 text-accent" />
-            </div>
+        {notes.map((n) => {
+          const isMarked = markedSet.has(n.id);
+          const rating = Number(n.rating || 0);
+          const isHighlighted = highlightId === n.id;
+          const userVote = voteMap[n.id] || 0;
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-foreground text-[15px]">
-                    {n.course_name}
-                  </h3>
+          return (
+            <motion.div
+              id={`note-card-${n.id}`}
+              key={n.id}
+              variants={animItem}
+              className={`col`}
+            >
+              <div className={`card-elevated overflow-hidden h-100 ${isHighlighted ? "ring-2" : ""}`}
+                style={isHighlighted ? { boxShadow: "0 0 0 2px hsl(var(--primary) / 0.4)" } : {}}>
+                <div className="p-4">
+                  <div className="d-flex align-items-start gap-3">
+                    <div className="d-flex align-items-center justify-content-center rounded-3 bg-accent-10 flex-shrink-0"
+                      style={{ width: "2.75rem", height: "2.75rem" }}>
+                      <FileText className="text-accent" style={{ width: "1.25rem", height: "1.25rem" }} />
+                    </div>
 
-                  <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
-                    {n.course_description}
-                  </p>
+                    <div className="flex-grow-1 min-w-0">
+                      <div className="d-flex align-items-start gap-2">
+                        <div className="flex-grow-1 min-w-0">
+                          <h3 className="fw-semibold text-foreground mb-0" style={{ fontSize: "0.9375rem" }}>
+                            {n.course_name}
+                          </h3>
 
-                  <p className="text-xs text-muted-foreground mt-1.5 font-medium">
-                    by <UserName userId={n.author_id} />
-                    {n.semester ? ` · ${n.semester}` : ""}
-                    {n.prof_name ? ` · ${n.prof_name}` : ""}
-                  </p>
+                          <p className="text-muted-foreground mt-1 line-clamp-2 mb-0" style={{ fontSize: "0.75rem" }}>
+                            {n.course_description}
+                          </p>
+
+                          <p className="text-muted-foreground mt-1 fw-medium mb-0" style={{ fontSize: "0.75rem" }}>
+                            by <UserName userId={n.author_id} />
+                            {n.semester ? ` · ${n.semester}` : ""}
+                            {n.prof_name ? ` · ${n.prof_name}` : ""}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            bookmarkMutation.mutate({
+                              noteId: n.id,
+                              nextMarked: !isMarked,
+                            });
+                          }}
+                          className={`bookmark-btn ${isMarked ? "marked" : ""}`}
+                          title={isMarked ? "Remove bookmark" : "Bookmark"}
+                        >
+                          <Bookmark style={{ width: "1rem", height: "1rem" }} fill={isMarked ? "currentColor" : "none"} />
+                        </button>
+                      </div>
+
+                      <div className="d-flex align-items-center gap-3 mt-3 pt-3 border-top border-border flex-wrap">
+                        <motion.button
+                          whileTap={{ scale: 0.85 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = userVote === 1 ? 0 : 1;
+                            voteMutation.mutate({ noteId: n.id, voteType: next });
+                            setVoteMap((prev) => ({ ...prev, [n.id]: next }));
+                          }}
+                          className="d-flex align-items-center gap-1 small text-muted-foreground hover-text-primary bg-transparent border-0 p-0 fw-medium"
+                          style={{ cursor: "pointer" }}
+                        >
+                          <ThumbsUp style={{ width: "1rem", height: "1rem" }} fill={userVote === 1 ? "currentColor" : "none"} />
+                          {rating}
+                        </motion.button>
+
+                        <motion.button
+                          whileTap={{ scale: 0.85 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = userVote === -1 ? 0 : -1;
+                            voteMutation.mutate({ noteId: n.id, voteType: next });
+                            setVoteMap((prev) => ({ ...prev, [n.id]: next }));
+                          }}
+                          className="d-flex align-items-center gap-1 small text-muted-foreground hover-text-destructive bg-transparent border-0 p-0 fw-medium"
+                          style={{ cursor: "pointer" }}
+                        >
+                          <ThumbsDown style={{ width: "1rem", height: "1rem" }} fill={userVote === -1 ? "currentColor" : "none"} />
+                        </motion.button>
+
+                        <a
+                          href={n.pdf}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="d-flex align-items-center gap-1 small text-muted-foreground hover-text-accent ms-auto text-decoration-none fw-medium"
+                          title="Open PDF"
+                        >
+                          <Download style={{ width: "0.875rem", height: "0.875rem" }} /> Open
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                {/* Bookmark */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    bookmarkMutation.mutate({
-                      noteId: n.id,
-                      nextMarked: !isMarked,
-                    });
-                  }}
-                  className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
-                    isMarked
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-primary"
-                  }`}
-                  title={isMarked ? "Remove bookmark" : "Bookmark"}
-                >
-                  <Bookmark
-                    className="w-4 h-4"
-                    fill={isMarked ? "currentColor" : "none"}
-                  />
-                </button>
               </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-3 mt-3.5 pt-3 border-t border-border/50 flex-wrap">
-                
-                {/* Like */}
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-
-                    const next =
-                      userVote === 1 ? 0 : 1;
-
-                    voteMutation.mutate({
-                      noteId: n.id,
-                      voteType: next,
-                    });
-
-                    setVoteMap((prev) => ({
-                      ...prev,
-                      [n.id]: next,
-                    }));
-                  }}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
-                >
-                  <ThumbsUp
-                    className="w-4 h-4"
-                    fill={userVote === 1 ? "currentColor" : "none"}
-                  />
-                  {rating}
-                </motion.button>
-
-                {/* Dislike */}
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-
-                    const next =
-                      userVote === -1 ? 0 : -1;
-
-                    voteMutation.mutate({
-                      noteId: n.id,
-                      voteType: next,
-                    });
-
-                    setVoteMap((prev) => ({
-                      ...prev,
-                      [n.id]: next,
-                    }));
-                  }}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
-                >
-                  <ThumbsDown
-                    className="w-4 h-4"
-                    fill={userVote === -1 ? "currentColor" : "none"}
-                  />
-                </motion.button>
-
-                {/* Open PDF */}
-                <a
-                  href={n.pdf}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-accent transition-colors ml-auto no-underline font-medium"
-                  title="Open PDF"
-                >
-                  <Download className="w-3.5 h-3.5" /> Open
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
+            </motion.div>
+          );
+        })}
       </motion.div>
-    );
-  })}
-</motion.div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdd(false)} />
-          <div className="relative w-full max-w-lg card-elevated p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-foreground">Upload Notes</h2>
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ zIndex: 50, padding: "1rem" }}>
+          <div className="position-absolute top-0 start-0 w-100 h-100 bg-black-40" onClick={() => setShowAdd(false)} />
+          <div className="position-relative w-100 card-elevated p-4" style={{ maxWidth: "32rem" }}>
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h2 className="fw-bold text-foreground mb-0" style={{ fontSize: "1.125rem" }}>Upload Notes</h2>
               <button
                 onClick={() => setShowAdd(false)}
-                className="p-2 rounded-lg hover:bg-muted/50 transition-colors border-0 bg-transparent cursor-pointer"
+                className="p-2 rounded-3 hover-bg-muted-50 border-0 bg-transparent"
+                style={{ cursor: "pointer" }}
               >
-                <X className="w-4 h-4 text-muted-foreground" />
+                <X className="text-muted-foreground" style={{ width: "1rem", height: "1rem" }} />
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="d-flex flex-column gap-2">
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">Course name*</label>
+                <label className="d-block small fw-semibold text-foreground mb-1">Course name*</label>
                 <input
                   value={form.course_name}
                   onChange={(e) => setForm((p) => ({ ...p, course_name: e.target.value }))}
@@ -377,7 +340,7 @@ const NotesPage = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">Description*</label>
+                <label className="d-block small fw-semibold text-foreground mb-1">Description*</label>
                 <textarea
                   value={form.course_description}
                   onChange={(e) => setForm((p) => ({ ...p, course_description: e.target.value }))}
@@ -386,9 +349,9 @@ const NotesPage = () => {
                   placeholder="What do these notes cover?"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">Semester</label>
+              <div className="row g-2">
+                <div className="col-sm-6">
+                  <label className="d-block small fw-semibold text-foreground mb-1">Semester</label>
                   <input
                     value={form.semester}
                     onChange={(e) => setForm((p) => ({ ...p, semester: e.target.value }))}
@@ -396,8 +359,8 @@ const NotesPage = () => {
                     placeholder="e.g. Spring 2026"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">Professor</label>
+                <div className="col-sm-6">
+                  <label className="d-block small fw-semibold text-foreground mb-1">Professor</label>
                   <input
                     value={form.prof_name}
                     onChange={(e) => setForm((p) => ({ ...p, prof_name: e.target.value }))}
@@ -408,15 +371,15 @@ const NotesPage = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">PDF*</label>
+                <label className="d-block small fw-semibold text-foreground mb-1">PDF*</label>
                 <input
                   type="file"
                   accept="application/pdf"
                   onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-muted-foreground"
+                  className="d-block w-100 small text-muted-foreground"
                 />
                 {pdfFile && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-muted-foreground mt-1 mb-0" style={{ fontSize: "0.75rem" }}>
                     Selected: {pdfFile.name} ({Math.round(pdfFile.size / 1024)} KB)
                   </p>
                 )}
@@ -427,7 +390,7 @@ const NotesPage = () => {
                 whileTap={{ scale: 0.98 }}
                 disabled={addNoteMutation.isPending}
                 onClick={() => addNoteMutation.mutate()}
-                className="btn-primary w-full border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                className="btn-primary-custom w-100 border-0"
               >
                 {addNoteMutation.isPending ? "Uploading..." : "Upload"}
               </motion.button>

@@ -40,7 +40,6 @@ const AskPage = () => {
     try {
       let imageUrl = "";
       if (images.length > 0) {
-        // Best-effort: only first image is supported by the backend schema today.
         const uniqueName = `${Date.now()}_${images[0].name.replace(/\s+/g, "_")}`;
         imageUrl = await uploadToCloudinary(images[0]._file, {
           resourceType: "image",
@@ -76,27 +75,27 @@ const AskPage = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
-      className="max-w-2xl mx-auto">
-      <div className="flex items-center gap-2 mb-1">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <h1 className="text-2xl font-bold text-foreground">Ask a Question</h1>
+      className="mx-auto" style={{ maxWidth: "36rem" }}>
+      <div className="d-flex align-items-center gap-2 mb-1">
+        <Sparkles className="text-primary" style={{ width: "1.25rem", height: "1.25rem" }} />
+        <h1 className="fs-3 fw-bold text-foreground">Ask a Question</h1>
       </div>
-      <p className="text-sm text-muted-foreground mb-6">Get help from the community by posting a clear, detailed question.</p>
+      <p className="small text-muted-foreground mb-4">Get help from the community by posting a clear, detailed question.</p>
 
-      <form onSubmit={handleSubmit} className="card-elevated p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="card-elevated p-4 d-flex flex-column gap-4">
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-2">Title</label>
+          <label className="d-block small fw-semibold text-foreground mb-2">Title</label>
           <input type="text" value={title} onChange={e => setTitle(e.target.value)}
             placeholder="What's your question about?" className="input-styled" />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-2">Description</label>
+          <label className="d-block small fw-semibold text-foreground mb-2">Description</label>
           <textarea value={body} onChange={e => setBody(e.target.value)}
             placeholder="Provide context, code snippets, and what you've tried..." rows={6} className="input-styled resize-none" />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-2">Attach Images (optional)</label>
-          <div className="border-2 border-dashed border-border rounded-2xl p-8 hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group relative">
+          <label className="d-block small fw-semibold text-foreground mb-2">Attach Images (optional)</label>
+          <label className="upload-label d-block p-8 text-center position-relative">
             <input
               type="file"
               accept="image/*"
@@ -110,24 +109,31 @@ const AskPage = () => {
                 });
                 e.target.value = "";
               }}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+              className="position-absolute top-0 start-0 w-100 h-100 opacity-0"
+              style={{ cursor: "pointer" }}
+            />
             <div className="text-center">
-              <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto mb-2.5 group-hover:bg-primary/10 transition-colors">
-                <ImagePlus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="d-flex align-items-center justify-content-center rounded-3 bg-muted-50 mx-auto mb-2"
+                style={{ width: "3rem", height: "3rem" }}>
+                <ImagePlus className="text-muted-foreground" style={{ width: "1.25rem", height: "1.25rem" }} />
               </div>
-              <p className="text-sm font-medium text-muted-foreground">Drop images here or click to upload</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG up to 10MB</p>
+              <p className="small fw-medium text-muted-foreground mb-0">Drop images here or click to upload</p>
+              <p className="text-muted-foreground mt-1 mb-0" style={{ fontSize: "0.75rem", opacity: 0.6 }}>PNG, JPG up to 10MB</p>
             </div>
-          </div>
+          </label>
           {images.length > 0 && (
-            <div className="flex flex-wrap gap-3 mt-3">
+            <div className="d-flex flex-wrap gap-2 mt-2">
               {images.map((img, i) => (
                 <motion.div key={i} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                  className="relative group/img rounded-xl overflow-hidden border border-border w-20 h-20">
-                  <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                  className="position-relative rounded-3 overflow-hidden border border-border"
+                  style={{ width: "5rem", height: "5rem" }}>
+                  <img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   <button type="button" onClick={() => removeImage(i)}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity border-0 cursor-pointer">
-                    <X className="w-3 h-3" />
+                    className="position-absolute top-0 end-0 d-flex align-items-center justify-content-center bg-destructive text-destructive-foreground border-0 cursor-pointer rounded-circle group-hover-show"
+                    style={{ width: "1.25rem", height: "1.25rem", margin: "0.25rem", opacity: 0, transition: "opacity 0.2s" }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                    onMouseLeave={e => e.currentTarget.style.opacity = "0"}>
+                    <X style={{ width: "0.75rem", height: "0.75rem" }} />
                   </button>
                 </motion.div>
               ))}
@@ -135,13 +141,14 @@ const AskPage = () => {
           )}
         </div>
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-2">Tags</label>
+          <label className="d-block small fw-semibold text-foreground mb-2">Tags</label>
           <input type="text" value={tags} onChange={e => setTags(e.target.value)}
             placeholder="e.g. react, javascript (comma separated)" className="input-styled" />
         </div>
         <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} type="submit" disabled={submitting}
-          className="btn-primary flex items-center gap-2 border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-          <Send className="w-4 h-4" /> {submitting ? "Posting..." : "Post Question"}
+          className="btn-primary-custom d-inline-flex align-items-center gap-2 border-0"
+          style={{ alignSelf: "flex-start" }}>
+          <Send style={{ width: "1rem", height: "1rem" }} /> {submitting ? "Posting..." : "Post Question"}
         </motion.button>
       </form>
     </motion.div>

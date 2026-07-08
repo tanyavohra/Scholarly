@@ -204,7 +204,6 @@ const QuestionsPage = () => {
     if (openHandledRef.current) return;
     const id = Number(openParam);
     if (!Number.isFinite(id) || id <= 0) return;
-    // Wait until questions are loaded so we can scroll into view.
     if (questionsQuery.isLoading) return;
     openHandledRef.current = true;
     setExpandedId(id);
@@ -279,28 +278,28 @@ const QuestionsPage = () => {
   const answerCounts = answerCountsQuery.data || {};
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="mx-auto" style={{ maxWidth: "56rem" }}>
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between mb-6"
+        className="d-flex align-items-center justify-content-between mb-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">All Questions</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="fs-3 fw-bold text-foreground">All Questions</h1>
+          <p className="small text-muted-foreground mt-1">
             {questions.length} questions from the community
           </p>
         </div>
       </motion.div>
 
       {questionsQuery.isLoading && (
-        <div className="card-elevated p-6 text-sm text-muted-foreground">Loading questions...</div>
+        <div className="card-elevated p-4 small text-muted-foreground">Loading questions...</div>
       )}
       {questionsQuery.error && (
-        <div className="card-elevated p-6 text-sm text-destructive">Failed to load questions.</div>
+        <div className="card-elevated p-4 small text-destructive">Failed to load questions.</div>
       )}
 
-      <motion.div variants={animContainer} initial="hidden" animate="show" className="space-y-3">
+      <motion.div variants={animContainer} initial="hidden" animate="show" className="d-flex flex-column gap-2">
         {filteredQuestions.map((q) => {
           const qTags = tagsByQuestionId.get(q.id) || [];
           const isMarked = markedSet.has(q.id);
@@ -324,54 +323,45 @@ const QuestionsPage = () => {
               className="card-elevated overflow-hidden"
             >
               <div
-                className="p-5 cursor-pointer"
+                className="p-4"
                 role="button"
                 tabIndex={0}
                 onClick={() => setExpandedId(isExpanded ? null : q.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") setExpandedId(isExpanded ? null : q.id);
                 }}
+                style={{ cursor: "pointer" }}
               >
-                <div className="flex items-start gap-4">
-                  <div className="flex flex-col items-center gap-1 min-w-[48px] pt-1">
+                <div className="d-flex align-items-start gap-3">
+                  <div className="d-flex flex-column align-items-center gap-1 pt-1" style={{ minWidth: "48px" }}>
                     <motion.button
                       whileTap={{ scale: 0.85 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         voteMutation.mutate({ targetId: q.id, voteType: 1 });
                       }}
-                      className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
-                        myVote === 1 ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                      }`}
-                      >
-                      <ThumbsUp
-                        className="w-4 h-4"
-                        fill={myVote === 1 ? "currentColor" : "none"}
-                      />
+                      className={`vote-btn ${myVote === 1 ? "liked" : ""}`}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <ThumbsUp style={{ width: "1rem", height: "1rem" }} fill={myVote === 1 ? "currentColor" : "none"} />
                     </motion.button>
-                    <span className="text-sm font-bold text-foreground">{rating}</span>
+                    <span className="fw-bold text-foreground" style={{ fontSize: "0.875rem" }}>{rating}</span>
                     <motion.button
                       whileTap={{ scale: 0.85 }}
                       onClick={(e) => {
                         e.stopPropagation();
                         voteMutation.mutate({ targetId: q.id, voteType: -1 });
                       }}
-                      className={`p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
-                        myVote === -1
-                          ? "text-destructive bg-destructive/10"
-                          : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      }`}
-                      >
-                      <ThumbsDown
-                        className="w-4 h-4"
-                        fill={myVote === -1 ? "currentColor" : "none"}
-                      />
+                      className={`vote-btn ${myVote === -1 ? "disliked" : ""}`}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <ThumbsDown style={{ width: "1rem", height: "1rem" }} fill={myVote === -1 ? "currentColor" : "none"} />
                     </motion.button>
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-foreground text-[15px] hover:text-primary transition-colors cursor-pointer">
+                  <div className="flex-grow-1 min-w-0">
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <h3 className="fw-semibold text-foreground hover-text-primary mb-0" style={{ fontSize: "0.9375rem", cursor: "pointer" }}>
                         {q.title}
                       </h3>
                       {q.image_url && (
@@ -380,10 +370,11 @@ const QuestionsPage = () => {
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="px-2 py-0.5 rounded-md bg-accent/10 text-accent text-[10px] font-semibold flex items-center gap-1 hover:bg-accent/15 transition-colors"
+                          className="px-2 py-0 rounded bg-accent-10 text-accent d-inline-flex align-items-center gap-1 text-decoration-none hover-bg-accent-15"
+                          style={{ fontSize: "0.625rem", fontWeight: 600 }}
                           title="Open attached image"
                         >
-                          <ImageIcon className="w-3 h-3" /> Image
+                          <ImageIcon style={{ width: "0.75rem", height: "0.75rem" }} /> Image
                         </a>
                       )}
 
@@ -392,30 +383,28 @@ const QuestionsPage = () => {
                           e.stopPropagation();
                           bookmarkMutation.mutate({ questionId: q.id, nextMarked: !isMarked });
                         }}
-                        className={`ml-auto p-2 rounded-lg transition-colors bg-transparent border-0 cursor-pointer ${
-                          isMarked ? "text-primary" : "text-muted-foreground hover:text-primary"
-                        }`}
+                        className={`bookmark-btn ms-auto ${isMarked ? "marked" : ""}`}
                         title={isMarked ? "Remove bookmark" : "Bookmark"}
                       >
-                        <Bookmark className="w-4 h-4" fill={isMarked ? "currentColor" : "none"} />
+                        <Bookmark style={{ width: "1rem", height: "1rem" }} fill={isMarked ? "currentColor" : "none"} />
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="w-3.5 h-3.5" />
+                    <div className="d-flex align-items-center gap-3 mt-2 text-muted-foreground flex-wrap" style={{ fontSize: "0.75rem" }}>
+                      <span className="d-flex align-items-center gap-1">
+                        <MessageCircle style={{ width: "0.875rem", height: "0.875rem" }} />
                         {answerCount != null ? answerCount : answerCountsQuery.isLoading ? "…" : 0}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <ThumbsUp className="w-3.5 h-3.5" />
+                      <span className="d-flex align-items-center gap-1">
+                        <ThumbsUp style={{ width: "0.875rem", height: "0.875rem" }} />
                         {rating}
                       </span>
-                      <span className="font-medium">
+                      <span className="fw-medium">
                         by <UserName userId={q.author_id} />
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
                       {qTags.map((tag) => (
                         <span key={tag} className="tag-chip">
                           {tag}
@@ -427,14 +416,15 @@ const QuestionsPage = () => {
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="ml-auto shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-border hover:border-primary/40 transition-colors bg-muted/30"
+                          className="d-block flex-shrink-0 rounded-3 overflow-hidden border border-border hover-border-primary"
+                          style={{ width: "5rem", height: "5rem", background: "hsl(var(--muted) / 0.3)" }}
                           title="Open attached image"
                         >
                           <img
                             src={q.image_url}
                             alt="Question attachment"
                             loading="lazy"
-                            className="w-full h-full object-cover"
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />
                         </a>
                       )}
@@ -443,12 +433,13 @@ const QuestionsPage = () => {
                           e.stopPropagation();
                           setExpandedId(isExpanded ? null : q.id);
                         }}
-                        className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer font-medium"
+                        className="ms-auto d-flex align-items-center gap-1 small text-muted-foreground hover-text-primary bg-transparent border-0 p-0 fw-medium"
+                        style={{ cursor: "pointer" }}
                       >
                         {isExpanded ? (
-                          <ChevronUp className="w-3.5 h-3.5" />
+                          <ChevronUp style={{ width: "0.875rem", height: "0.875rem" }} />
                         ) : (
-                          <ChevronDown className="w-3.5 h-3.5" />
+                          <ChevronDown style={{ width: "0.875rem", height: "0.875rem" }} />
                         )}
                         {isExpanded ? "Hide answers" : "Show answers"}
                       </button>
@@ -466,65 +457,65 @@ const QuestionsPage = () => {
                     transition={{ duration: 0.25 }}
                     className="overflow-hidden"
                   >
-                    <div className="border-t border-border bg-muted/20 p-5 space-y-3">
+                    <div className="border-top border-border p-4 bg-muted-20 d-flex flex-column gap-2">
                       {commentsQuery.isLoading && (
-                        <p className="text-sm text-muted-foreground text-center py-3">
+                        <p className="small text-muted-foreground text-center py-2 mb-0">
                           Loading answers...
                         </p>
                       )}
                       {commentsQuery.error && (
-                        <p className="text-sm text-destructive text-center py-3">
+                        <p className="small text-destructive text-center py-2 mb-0">
                           Failed to load answers.
                         </p>
                       )}
                       {!commentsQuery.isLoading && safeArray(comments).length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-3">
+                        <p className="small text-muted-foreground text-center py-2 mb-0">
                           No answers yet. Be the first!
                         </p>
                       )}
 
                       {safeArray(comments).map((c) => (
-                        <div key={c.id} className="flex gap-3">
-                          <div className="avatar-ring bg-primary/10 text-primary text-[10px] w-7 h-7 shrink-0 mt-0.5 ring-0">
+                        <div key={c.id} className="d-flex gap-2">
+                          <div className="avatar-ring bg-primary-10 text-primary mt-0" style={{ width: "1.75rem", height: "1.75rem", fontSize: "0.625rem", boxShadow: "none" }}>
                             {String(c.user_id || "?").slice(0, 1)}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-foreground">
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="fw-semibold text-foreground" style={{ fontSize: "0.875rem" }}>
                                 <UserName userId={c.user_id} />
                               </span>
                             </div>
-                            <p className="text-sm text-muted-foreground mt-0.5">{c.content}</p>
-                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground/70">
+                            <p className="text-muted-foreground mt-0 mb-0" style={{ fontSize: "0.875rem" }}>{c.content}</p>
+                            <div className="d-flex align-items-center gap-2 mt-1 text-muted-foreground" style={{ fontSize: "0.625rem", opacity: 0.7 }}>
                               <motion.button
                                 whileTap={{ scale: 0.9 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   commentVoteMutation.mutate({ commentId: c.id, voteType: 1 });
                                 }}
-                                className="p-1 rounded-md hover:bg-primary/10 transition-colors bg-transparent border-0 cursor-pointer"
-                                title="Like"
+                                className="vote-btn like"
+                                style={{ padding: "0.25rem" }}
                               >
-                                <ThumbsUp className="w-3 h-3" />
+                                <ThumbsUp style={{ width: "0.75rem", height: "0.75rem" }} />
                               </motion.button>
-                              <span className="min-w-[18px] text-center">{Number(c.rating || 0)}</span>
+                              <span className="text-center" style={{ minWidth: "18px" }}>{Number(c.rating || 0)}</span>
                               <motion.button
                                 whileTap={{ scale: 0.9 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   commentVoteMutation.mutate({ commentId: c.id, voteType: -1 });
                                 }}
-                                className="p-1 rounded-md hover:bg-destructive/10 transition-colors bg-transparent border-0 cursor-pointer"
-                                title="Dislike"
+                                className="vote-btn dislike"
+                                style={{ padding: "0.25rem" }}
                               >
-                                <ThumbsDown className="w-3 h-3" />
+                                <ThumbsDown style={{ width: "0.75rem", height: "0.75rem" }} />
                               </motion.button>
                             </div>
                           </div>
                         </div>
                       ))}
 
-                      <div className="flex gap-2 pt-2">
+                      <div className="d-flex gap-2 pt-2">
                         <input
                           type="text"
                           value={newComment[q.id] || ""}
@@ -539,7 +530,8 @@ const QuestionsPage = () => {
                             setNewComment((prev) => ({ ...prev, [q.id]: "" }));
                           }}
                           placeholder="Write an answer..."
-                          className="input-styled flex-1 !py-2.5 !text-sm"
+                          className="input-styled flex-grow-1"
+                          style={{ paddingTop: "0.625rem", paddingBottom: "0.625rem" }}
                         />
                         <motion.button
                           whileTap={{ scale: 0.9 }}
@@ -549,9 +541,10 @@ const QuestionsPage = () => {
                             addCommentMutation.mutate({ questionId: q.id, content: text });
                             setNewComment((prev) => ({ ...prev, [q.id]: "" }));
                           }}
-                          className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all border-0 cursor-pointer shadow-sm"
+                          className="send-btn d-flex align-items-center justify-content-center border-0"
+                          style={{ padding: "0.625rem" }}
                         >
-                          <Send className="w-3.5 h-3.5" />
+                          <Send style={{ width: "0.875rem", height: "0.875rem" }} />
                         </motion.button>
                       </div>
                     </div>

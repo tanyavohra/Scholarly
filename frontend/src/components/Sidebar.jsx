@@ -38,24 +38,24 @@ const Sidebar = ({ collapsed, onToggle }) => {
   };
 
   return (
-    <aside className={`${collapsed ? "w-[72px]" : "w-64"} min-h-screen flex flex-col bg-card border-r border-border/50 transition-all duration-300 relative`}>
+    <aside className={`${collapsed ? "sidebar-collapsed" : "sidebar-expanded"} min-vh-100 d-flex flex-column bg-card border-end border-border position-relative`}>
       <button
         onClick={onToggle}
-        className="absolute -right-3.5 top-8 w-7 h-7 rounded-full bg-card border border-border flex items-center justify-center hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all z-20 shadow-md cursor-pointer"
+        className="toggle-btn position-absolute"
+        style={{ right: "-0.875rem", top: "2rem" }}
       >
-        {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+        {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>
 
-      <div className={`p-5 pb-6 ${collapsed ? "px-4" : ""}`}>
-        <Link to="/home" className="flex items-center gap-3 no-underline">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-md shrink-0"
-            style={{ boxShadow: '0 4px 12px hsl(245 58% 56% / 0.3)' }}>
-            <img src="/book.png" alt="Scholarly" className="w-6 h-6 object-contain" />
+      <div className={`p-4 pb-6 ${collapsed ? "px-3" : ""}`}>
+        <Link to="/home" className="d-flex align-items-center gap-3 text-decoration-none">
+          <div className="icon-avatar bg-primary shadow-sm">
+            <img src="/book.png" alt="Scholarly" className="w-6 h-6" />
           </div>
           <AnimatePresence>
             {!collapsed && (
               <motion.span initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
-                className="text-xl font-bold text-foreground tracking-tight">
+                className="fw-bold text-foreground fs-4">
                 Scholarly
               </motion.span>
             )}
@@ -63,7 +63,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
         </Link>
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
+      <nav className="flex-grow-1 px-2 d-flex flex-column gap-1">
         {navItems.map((item, i) => {
           const isActive = location.pathname === item.to;
           return (
@@ -71,14 +71,9 @@ const Sidebar = ({ collapsed, onToggle }) => {
               <Link
                 to={item.to}
                 title={collapsed ? item.label : undefined}
-                className={`flex items-center gap-3 ${collapsed ? "justify-center px-2" : "px-3.5"} py-2.5 rounded-xl text-sm font-medium transition-all no-underline relative ${
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                }`}
-                style={isActive ? { boxShadow: '0 2px 8px hsl(245 58% 56% / 0.25)' } : {}}
+                className={`nav-link-custom ${collapsed ? "justify-content-center px-2" : ""} ${isActive ? "active" : ""}`}
               >
-                <item.icon className={`w-[18px] h-[18px] shrink-0`} />
+                <item.icon className="flex-shrink-0" style={{ width: "18px", height: "18px" }} />
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -92,9 +87,9 @@ const Sidebar = ({ collapsed, onToggle }) => {
         })}
       </nav>
 
-      <div className={`p-3 mx-3 mb-4 rounded-xl border border-border/50 ${collapsed ? "mx-2 p-2" : ""}`}>
-        <Link onClick={handleSignOut} to="/" className={`flex items-center gap-2.5 text-sm text-muted-foreground hover:text-destructive transition-colors no-underline ${collapsed ? "justify-center" : ""}`}>
-          <LogOut className="w-4 h-4 shrink-0" />
+      <div className={`p-2 mx-2 mb-3 rounded-3 border border-border ${collapsed ? "mx-1 p-1" : ""}`}>
+        <Link onClick={handleSignOut} to="/" className={`d-flex align-items-center gap-2 text-decoration-none small text-muted-foreground hover-text-destructive ${collapsed ? "justify-content-center" : ""}`}>
+          <LogOut className="flex-shrink-0" style={{ width: "1rem", height: "1rem" }} />
           <AnimatePresence>
             {!collapsed && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>Sign out</motion.span>}
           </AnimatePresence>

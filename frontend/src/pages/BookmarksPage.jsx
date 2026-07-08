@@ -122,56 +122,51 @@ const BookmarksPage = () => {
   const markedNotes = safeArray(markedNotesQuery.data);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-foreground mb-1">Bookmarks</h1>
-      <p className="text-sm text-muted-foreground mb-5">Your saved questions and notes.</p>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto" style={{ maxWidth: "56rem" }}>
+      <h1 className="fs-3 fw-bold text-foreground mb-1">Bookmarks</h1>
+      <p className="small text-muted-foreground mb-4">Your saved questions and notes.</p>
 
-      <div className="flex gap-2 mb-6">
+      <div className="d-flex gap-2 mb-4">
         <button
           onClick={() => setTab("questions")}
-          className={`px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-all border-0 cursor-pointer ${
-            tab === "questions" ? "bg-primary text-primary-foreground shadow-sm" : "bg-card text-muted-foreground hover:text-foreground"
-          }`}
-          style={tab === "questions" ? { boxShadow: "0 2px 8px hsl(245 58% 56% / 0.25)" } : {}}
+          className={`filter-btn d-flex align-items-center gap-2 ${tab === "questions" ? "active" : ""}`}
         >
-          <HelpCircle className="w-4 h-4" /> Questions ({markedQuestions.length})
+          <HelpCircle style={{ width: "1rem", height: "1rem" }} /> Questions ({markedQuestions.length})
         </button>
         <button
           onClick={() => setTab("notes")}
-          className={`px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-all border-0 cursor-pointer ${
-            tab === "notes" ? "bg-primary text-primary-foreground shadow-sm" : "bg-card text-muted-foreground hover:text-foreground"
-          }`}
-          style={tab === "notes" ? { boxShadow: "0 2px 8px hsl(245 58% 56% / 0.25)" } : {}}
+          className={`filter-btn d-flex align-items-center gap-2 ${tab === "notes" ? "active" : ""}`}
         >
-          <FileText className="w-4 h-4" /> Notes ({markedNotes.length})
+          <FileText style={{ width: "1rem", height: "1rem" }} /> Notes ({markedNotes.length})
         </button>
       </div>
 
       {tab === "questions" && (
-        <motion.div variants={animContainer} initial="hidden" animate="show" className="space-y-3">
+        <motion.div variants={animContainer} initial="hidden" animate="show" className="d-flex flex-column gap-2">
           {markedQuestions.map((q) => (
-            <motion.div key={q.id} variants={animItem} className="card-elevated p-5">
-              <div className="flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <Bookmark className="w-4 h-4 text-primary" />
+            <motion.div key={q.id} variants={animItem} className="card-elevated p-4">
+              <div className="d-flex align-items-start gap-3">
+                <div className="d-flex align-items-center justify-content-center rounded-3 bg-primary-10 flex-shrink-0"
+                  style={{ width: "2.5rem", height: "2.5rem" }}>
+                  <Bookmark className="text-primary" style={{ width: "1rem", height: "1rem" }} />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-foreground text-[15px]">{q.title}</h3>
-                      <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <ThumbsUp className="w-3.5 h-3.5" />
+                <div className="flex-grow-1">
+                  <div className="d-flex align-items-start gap-2">
+                    <div className="flex-grow-1">
+                      <h3 className="fw-semibold text-foreground mb-0" style={{ fontSize: "0.9375rem" }}>{q.title}</h3>
+                      <div className="d-flex align-items-center gap-3 mt-2 text-muted-foreground flex-wrap" style={{ fontSize: "0.75rem" }}>
+                        <span className="d-flex align-items-center gap-1">
+                          <ThumbsUp style={{ width: "0.875rem", height: "0.875rem" }} />
                           {Number(q.rating || 0)}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <MessageCircle className="w-3.5 h-3.5" /> —
+                        <span className="d-flex align-items-center gap-1">
+                          <MessageCircle style={{ width: "0.875rem", height: "0.875rem" }} /> —
                         </span>
-                        <span className="font-medium">
+                        <span className="fw-medium">
                           by <UserName userId={q.author_id} />
                         </span>
                       </div>
-                      <div className="flex gap-2 mt-2.5 flex-wrap">
+                      <div className="d-flex gap-2 mt-2 flex-wrap">
                         {(tagsByQuestionId.get(q.id) || []).map((tag) => (
                           <span key={tag} className="tag-chip">
                             {tag}
@@ -181,10 +176,11 @@ const BookmarksPage = () => {
                     </div>
                     <button
                       onClick={() => unmarkQuestionMutation.mutate(q.id)}
-                      className="p-2 rounded-lg hover:bg-muted/50 transition-colors border-0 bg-transparent cursor-pointer"
+                      className="p-2 rounded-3 hover-bg-muted-50 border-0 bg-transparent"
+                      style={{ cursor: "pointer" }}
                       title="Remove bookmark"
                     >
-                      <X className="w-4 h-4 text-muted-foreground" />
+                      <X className="text-muted-foreground" style={{ width: "1rem", height: "1rem" }} />
                     </button>
                   </div>
                 </div>
@@ -192,47 +188,51 @@ const BookmarksPage = () => {
             </motion.div>
           ))}
           {markedQuestions.length === 0 && (
-            <div className="card-elevated p-10 text-center text-sm text-muted-foreground">No bookmarked questions yet.</div>
+            <div className="card-elevated p-10 text-center small text-muted-foreground">No bookmarked questions yet.</div>
           )}
         </motion.div>
       )}
 
       {tab === "notes" && (
-        <motion.div variants={animContainer} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <motion.div variants={animContainer} initial="hidden" animate="show" className="row row-cols-1 row-cols-md-2 g-3">
           {markedNotes.map((n) => (
-            <motion.div key={n.id} variants={animItem} className="card-elevated p-5">
-              <div className="flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                  <FileText className="w-5 h-5 text-accent" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground text-[15px]">{n.course_name}</h3>
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        by <UserName userId={n.author_id} />
-                      </p>
-                      <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <ThumbsUp className="w-3.5 h-3.5" />
-                          {Number(n.rating || 0)}
-                        </span>
+            <motion.div key={n.id} variants={animItem} className="col">
+              <div className="card-elevated p-4 h-100">
+                <div className="d-flex align-items-start gap-3">
+                  <div className="d-flex align-items-center justify-content-center rounded-3 bg-accent-10 flex-shrink-0"
+                    style={{ width: "2.5rem", height: "2.5rem" }}>
+                    <FileText className="text-accent" style={{ width: "1.25rem", height: "1.25rem" }} />
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="d-flex align-items-start gap-2">
+                      <div className="flex-grow-1 min-w-0">
+                        <h3 className="fw-semibold text-foreground mb-0" style={{ fontSize: "0.9375rem" }}>{n.course_name}</h3>
+                        <p className="text-muted-foreground mt-1 mb-0" style={{ fontSize: "0.75rem" }}>
+                          by <UserName userId={n.author_id} />
+                        </p>
+                        <div className="d-flex align-items-center gap-3 mt-2 text-muted-foreground" style={{ fontSize: "0.75rem" }}>
+                          <span className="d-flex align-items-center gap-1">
+                            <ThumbsUp style={{ width: "0.875rem", height: "0.875rem" }} />
+                            {Number(n.rating || 0)}
+                          </span>
+                        </div>
                       </div>
+                      <button
+                        onClick={() => unmarkNoteMutation.mutate(n.id)}
+                        className="p-2 rounded-3 hover-bg-muted-50 border-0 bg-transparent"
+                        style={{ cursor: "pointer" }}
+                        title="Remove bookmark"
+                      >
+                        <X className="text-muted-foreground" style={{ width: "1rem", height: "1rem" }} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => unmarkNoteMutation.mutate(n.id)}
-                      className="p-2 rounded-lg hover:bg-muted/50 transition-colors border-0 bg-transparent cursor-pointer"
-                      title="Remove bookmark"
-                    >
-                      <X className="w-4 h-4 text-muted-foreground" />
-                    </button>
                   </div>
                 </div>
               </div>
             </motion.div>
           ))}
           {markedNotes.length === 0 && (
-            <div className="card-elevated p-10 text-center text-sm text-muted-foreground">No bookmarked notes yet.</div>
+            <div className="card-elevated p-10 text-center small text-muted-foreground">No bookmarked notes yet.</div>
           )}
         </motion.div>
       )}

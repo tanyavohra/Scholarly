@@ -10,7 +10,7 @@ const PdfChatPage = () => {
   const [messages, setMessages] = useState([
     {
       role: "system",
-      text: "Upload a PDF and I’ll answer questions about it.",
+      text: "Upload a PDF and I'll answer questions about it.",
     },
   ]);
 
@@ -20,7 +20,6 @@ const PdfChatPage = () => {
   const [processed, setProcessed] = useState(false);
   const [docId, setDocId] = useState("");
   const autoStartedRef = useRef(false);
-
 
   const canProcess = useMemo(() => Boolean(pdfFile), [pdfFile]);
 
@@ -38,8 +37,6 @@ const PdfChatPage = () => {
         await sleep(pollMs);
         pollMs = Math.min(6000, Math.round(pollMs * 1.2));
       } catch (err) {
-        // Transient: Render cold starts / brief timeouts can cause status polling to fail.
-        // Keep polling until the overall timeout is reached.
         if (err instanceof ApiError) {
           if (err.status === 404 && notFoundCount < 5) {
             notFoundCount += 1;
@@ -53,7 +50,6 @@ const PdfChatPage = () => {
             continue;
           }
         } else {
-          // Network error (fetch threw)
           await sleep(pollMs);
           pollMs = Math.min(6000, Math.round(pollMs * 1.2));
           continue;
@@ -72,7 +68,6 @@ const PdfChatPage = () => {
       formData.append("pdfFiles", pdfFile, pdfFile.name || "file.pdf");
       const res = await api.postForm("/processpdf", formData);
 
-      // Node may run in async mode.
       if (res?.job_id) {
         const job = await waitForJob(res.job_id);
         if (job?.index_built === false) throw new Error("Embeddings/index were not created.");
@@ -95,7 +90,6 @@ const PdfChatPage = () => {
         "Failed to process PDF.";
       toast({ title: "Processing failed", description: String(message), variant: "destructive" });
 
-      // Special-case: 409 means there’s already an active job; wait for it.
       if (err instanceof ApiError && err.status === 409 && err.data?.job_id) {
         try {
           const job = await waitForJob(err.data.job_id);
@@ -148,61 +142,69 @@ const PdfChatPage = () => {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="max-w-3xl mx-auto"
+      className="mx-auto"
+      style={{ maxWidth: "48rem" }}
     >
-      <div className="flex items-center gap-2 mb-1">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <h1 className="text-2xl font-bold text-foreground">Chat with PDF</h1>
+      <div className="d-flex align-items-center gap-2 mb-1">
+        <Sparkles className="text-primary" style={{ width: "1.25rem", height: "1.25rem" }} />
+        <h1 className="fs-3 fw-bold text-foreground">Chat with PDF</h1>
       </div>
-      <p className="text-sm text-muted-foreground mb-5">
+      <p className="small text-muted-foreground mb-4">
         Upload a PDF and ask questions about its content.
       </p>
 
-      <div className="card-elevated overflow-hidden rounded-2xl">
-        <div className="p-6 border-b border-border space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <label className="border-2 border-dashed border-border rounded-2xl p-6 text-center hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group">
-              <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3 group-hover:bg-primary/10 transition-colors">
-                <FileUp className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-              <p className="text-sm font-semibold text-foreground">
-                {pdfFile ? pdfFile.name : "Click to select a PDF"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1.5">PDF up to ~25MB</p>
-              <input
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-              />
-            </label>
+      <div className="card-elevated overflow-hidden rounded-4">
+        <div className="p-4 border-bottom border-border d-flex flex-column gap-3">
+          <div className="row g-2">
+            <div className="col">
+              <label className="upload-label d-block p-6 text-center position-relative">
+                <div className="d-flex flex-column align-items-center">
+                  <div className="d-flex align-items-center justify-content-center rounded-4 bg-muted-50 mx-auto mb-2"
+                    style={{ width: "3rem", height: "3rem" }}>
+                    <FileUp className="text-muted-foreground" style={{ width: "1.5rem", height: "1.5rem" }} />
+                  </div>
+                  <p className="small fw-semibold text-foreground mb-0">
+                    {pdfFile ? pdfFile.name : "Click to select a PDF"}
+                  </p>
+                  <p className="text-muted-foreground mt-1 mb-0" style={{ fontSize: "0.75rem" }}>PDF up to ~25MB</p>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="position-absolute top-0 start-0 w-100 h-100 opacity-0"
+                    style={{ cursor: "pointer" }}
+                    onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </label>
+            </div>
           </div>
 
           <button
             disabled={!canProcess || processing}
             onClick={handleProcess}
-            className="btn-primary w-full flex items-center justify-center gap-2 border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="btn-primary-custom w-100 d-flex align-items-center justify-content-center gap-2 border-0"
           >
-            {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {processing ? <Loader2 className="spinner-border spinner-border-sm" /> : null}
             {processing ? "Processing..." : processed ? "Re-process PDF" : "Process PDF"}
           </button>
         </div>
 
-        <div className="h-80 overflow-y-auto p-6 space-y-3">
+        <div className="overflow-auto p-4 d-flex flex-column gap-2" style={{ height: "20rem" }}>
           {messages.map((msg, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`d-flex ${msg.role === "user" ? "justify-content-end" : "justify-content-start"}`}
             >
               <div
-                className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                className={`px-3 py-2 rounded-4 small lh-base ${
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted/40 text-foreground"
+                    : "bg-muted-40 text-foreground"
                 }`}
+                style={{ maxWidth: "80%" }}
               >
                 {msg.text}
               </div>
@@ -210,24 +212,23 @@ const PdfChatPage = () => {
           ))}
         </div>
 
-        <div className="p-4 border-t border-border flex gap-2.5 bg-muted/10">
+        <div className="p-3 border-top border-border d-flex gap-2 bg-muted-10">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder={processed ? "Ask about the PDF..." : "Process a PDF to start chatting..."}
-            className="input-styled flex-1"
+            className="input-styled flex-grow-1"
             disabled={!processed}
           />
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleSend}
             disabled={!processed}
-            className="p-3 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all border-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ boxShadow: "0 2px 8px hsl(245 58% 56% / 0.25)" }}
+            className="send-btn d-flex align-items-center justify-content-center border-0"
           >
-            <Send className="w-4 h-4" />
+            <Send style={{ width: "1rem", height: "1rem" }} />
           </motion.button>
         </div>
       </div>
