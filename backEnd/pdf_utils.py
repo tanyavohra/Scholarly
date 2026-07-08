@@ -451,22 +451,14 @@ def generate_answer(question: str, context: str) -> dict:
         top_p = 0.9
     do_sample = _truthy(os.getenv("QA_DO_SAMPLE") or "0")
 
-    allow_general = _truthy(os.getenv("QA_ALLOW_GENERAL_KNOWLEDGE") or "0")
-    if allow_general:
-        system_instr = (
-            "Answer the user's question using the provided context as evidence.\n\n"
-            "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
-            "but do NOT invent claims about the specific PDF/document that are not supported by the context.\n\n"
-            "If the user asks for a fact about the document and it is not supported by the context, say "
-            "\"I don't know\" and ask one clarifying question.\n\n"
-            "Give a concise answer (1-3 sentences).\n\n"
-        )
-    else:
-        system_instr = (
-            "Answer the user's question using ONLY the provided context. Do not use outside knowledge.\n\n"
-            "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question.\n"
-            "Otherwise, give a concise answer (1-3 sentences).\n\n"
-        )
+    system_instr = (
+        "You answer questions using the PDF context provided below. "
+        "You may use general knowledge to understand abbreviations and word meanings. "
+        "If the context contains enough information, give a concise answer (1-3 sentences) based on the context. "
+        "If the context does NOT contain enough information, still try to answer using your own knowledge, "
+        "but start your answer with \"According to outside sources: \" to make clear the answer comes from outside knowledge. "
+        "Do NOT say \"I don't know\" — always attempt an answer.\n\n"
+    )
 
     prompt = system_instr + f"Context:\n{context}\n\nQuestion: {question}"
 
@@ -524,20 +516,14 @@ def generate_answer(question: str, context: str) -> dict:
         chat_model = model if ":" in model else f"{model}:hf-inference"
 
         client = OpenAI(base_url=base_url, api_key=token)
-        if allow_general:
-            system_content = (
-                "You answer questions using the provided context as evidence. "
-                "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
-                "but do NOT invent claims about the specific PDF/document that are not supported by the context. "
-                "If the user asks for a fact about the document and it is not supported by the context, say \"I don't know\" "
-                "and ask one clarifying question. Otherwise give a concise answer (1-3 sentences)."
-            )
-        else:
-            system_content = (
-                "You answer questions using ONLY the provided context. "
-                "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
-                "Otherwise give a concise answer (1-3 sentences)."
-            )
+        system_content = (
+            "You answer questions using the PDF context provided below. "
+            "You may use general knowledge to understand abbreviations and word meanings. "
+            "If the context contains enough information, give a concise answer (1-3 sentences) based on the context. "
+            "If the context does NOT contain enough information, still try to answer using your own knowledge, "
+            "but start your answer with \"According to outside sources: \" to make clear the answer comes from outside knowledge. "
+            "Do NOT say \"I don't know\" — always attempt an answer."
+        )
         completion = client.chat.completions.create(
             model=chat_model,
             messages=[

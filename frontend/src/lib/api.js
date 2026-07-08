@@ -66,27 +66,40 @@ export async function apiRequest(path, { method = "GET", body, formData, headers
   const data = await parseResponse(res);
 
   if (!res.ok) {
-    let message =
-      (data && typeof data === "object" && (data.error || data.Message)) ||
-      (typeof data === "string" ? data : "") ||
-      res.statusText ||
-      "Request failed";
+    let message = extractErrorMessage(data, res);
 
     if (typeof message === "string" && looksLikeHtml(message)) {
-      message =
-        res.status === 502 || res.status === 503 || res.status === 504
-          ? "Bad gateway (backend temporarily unavailable). Please retry."
-          : "Unexpected HTML response from server.";
+      if (res.status >= 500) {
+        message = "Backend temporarily unavailable. Please retry.";
+      } else {
+        message = "Unexpected HTML response from server.";
+      }
     } else if (typeof message === "string") {
-      message = message.trim();
-      if (message.length > 2000) message = `${message.slice(0, 2000)}…`;
-      if (!message) message = res.statusText || "Request failed";
+      message = message.trim().slice(0, 2000);
+      if (!message) {
+        message = res.statusText || "Request failed";
+      }
     }
 
-    throw new ApiError(String(message), { status: res.status, data, url });
+    throw new ApiError(message, { status: res.status, data, url });
   }
 
   return data;
+}
+
+function extractErrorMessage(data, res) {
+  if (data && typeof data === "object") {
+    if (data.error) {
+      return data.error;
+    }
+    if (data.Message) {
+      return data.Message;
+    }
+  }
+  if (typeof data === "string") {
+    return data;
+  }
+  return res.statusText || "Request failed";
 }
 
 export const api = {
