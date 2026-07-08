@@ -6,8 +6,6 @@ const crypto = require("node:crypto");
 const cookiesParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const fs = require('fs');
-const { Poppler } = require('node-poppler');
-const poppler = new Poppler();
 const app = express();
 // Disable ETags globally to prevent 304 responses for polling endpoints (e.g. /processpdf/status/:jobId).
 app.disable("etag");
@@ -353,7 +351,6 @@ app.post("/api/contact", contactRateLimit, async (req, res) => {
   }
 });
 
-//idint = 5;
 app.post("/signup", async (req, res) => {
   const saltRounds = 10;
 
@@ -370,10 +367,8 @@ app.post("/signup", async (req, res) => {
     }
 
     if (await checkPrevRecord(req)) {
-      // console.log("LA")
       return res.json({ Message: "Already Registered" });
     } else {
-      console.log("AL");
       const hashedPassword = await bcrypt.hash(req.body.password.toString(), 9);
 
        try {
@@ -412,14 +407,12 @@ app.post("/signup", async (req, res) => {
 });
 
 async function checkPrevRecord(req) {
-  console.log("data");
   const existing = await User.findOne({ email: req.body.email }).select({ id: 1 });
   return !!existing;
 }
 
 const verifyUser = (req, res, next) => {
   const token = req.cookies.token;
-  //console.log(req)
 
   if (!token) {
     return res.json({ Message: "We need token Provoide it..." });
@@ -461,7 +454,6 @@ app.post("/login", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
     if (!user) {
-      console.log("", []);
       return res.json({ Message: "No Record... Signup!" });
     }
 
@@ -471,40 +463,17 @@ app.post("/login", async (req, res) => {
     );
 
     if (validPassword) {
-      console.log("YEeY validpass");
       const token = jwt.sign({ name: user.name }, JWT_SECRET, { expiresIn: "1d" });
       res.cookie("token", token, cookieOptions());
       await updateToken(values[0], token);
       return res.json({ Status: "Success" });
     } else {
-      console.log(
-        "NO>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-      );
       return res.json({ Message: "Invalid email or password" });
     }
   } catch (err) {
-    console.log(err + "H");
     return res.json("Error");
   }
 });
-
-async function checkPass(req, res, values) {
-  try {
-    const user = await User.findOne({ password: req.body.password });
-    if (user) {
-      const token = jwt.sign({ name: user.name }, JWT_SECRET, { expiresIn: "1d" });
-      res.cookie("token", token, cookieOptions());
-      await updateToken(values[0], token);
-      return res.json({ Status: "Success" });
-    } else {
-      console.log([]);
-      return res.json({ Message: "Wrong Password!" });
-    }
-  } catch (err) {
-    console.error(err);
-    return res.json("Error");
-  }
-}
 
 app.get("/logout", async (req, res) => {
   try {
@@ -523,35 +492,6 @@ async function get_author_id(token) {
   return user.id;
 }
 
-// app.post("/question", async (req, res) => {
-//   const token = req.cookies.token;
-
-//   if (!token) {
-//     return res.json({ Message: "We need token Provoide it..." });
-//   }
-
-//   try {
-//     const authorId = await get_author_id(token);
-
-//     const sql =
-//       "INSERT INTO questions(title, content, author_id, image_url) VALUES(?)";
-//     const values = [req.body.title, req.body.question, authorId, req.body.url];
-
-//     db.query(sql, [values], (err, data) => {
-//       if (err) {
-//         console.error(err);
-//         return res.json("Error");
-//       }
-//       console.log(data);
-//       return res.json(data);
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.json("Error");
-//   }
-// });
-
-// Adding tags  
 app.post("/question", async (req, res) => {
   const token = req.cookies.token;
 
@@ -633,35 +573,6 @@ app.post("/question", async (req, res) => {
 });
 
 
-
-// app.post('/question', (req, res) =>{
-//     const token = req.cookies.token;
-//     // console.log(token)
-//     if(!token){
-//         console.log("login!");
-//         return res.json({Message: "We need token Provoide it..."})
-//     }else{
-//         the_id=-1;
-//         get_author_id(token, the_id);
-//     }
-//     console.log(the_id)
-//     const sql = "INSERT INTO questions(title, content, author_id) VALUES(?)";
-//         const values =[
-//             req.body.title,
-//             req.body.content,
-//             the_id
-//         ]
-//         db.query(sql, [values], (err, data) =>{
-//             //console.log(values);
-//             if(err){
-//                 console.log(err + "H");
-//                 return res.json("Error");
-//             }
-//             console.log(data + "H");
-//             return res.json(data);
-//         })
-// })
-
 app.get("/allquestions", async (req, res) => {
   try {
     const data = await Question.find({});
@@ -678,7 +589,6 @@ async function updateVote(req, newValue, existingVoteid, existingvotevalue) {
     { $set: { value: newValue } }
   );
   await updateRating(req, existingvotevalue, newValue);
-  console.log(updateResult);
   return updateResult;
 }
 
@@ -692,7 +602,6 @@ async function addVote(req, user_id, target_id, vote_type, is_comment) {
   };
   const insertResult = await Vote.create(voteDoc);
   await addRating(req);
-  console.log(insertResult);
   return insertResult;
 }
 async function addRating(req) {
@@ -701,7 +610,6 @@ async function addRating(req) {
     { id: req.body.target_id },
     { $inc: { rating: req.body.vote_type } }
   );
-  console.log(insertResult);
   return insertResult;
 }
 
@@ -712,7 +620,6 @@ async function updateRating(req, existingvalue, newValue) {
     { id: req.body.target_id },
     { $inc: { rating: delta } }
   );
-  console.log(insertResult);
   return insertResult;
 }
 
@@ -723,11 +630,9 @@ app.post("/vote", async (req, res) => {
     return res.json({ Message: "We need token Provide it..." });
   }
   const isComment = req.body.is_comment;
-  console.log(req);
 
   try {
     const user_id = await get_author_id(token);
-    console.log("---------" + user_id);
 
     const filter = { user_id };
     if (isComment) {
@@ -737,14 +642,12 @@ app.post("/vote", async (req, res) => {
     }
 
     const results = await Vote.find(filter);
-    console.log("***********" + results);
 
     if (results.length > 0) {
       const existingVote = results[0];
       const existingVoteJson = [existingVote.toJSON()];
       const newValue =
         existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
-      console.log("U");
       try {
         await updateVote(req, newValue, existingVote.id, existingVote.value);
         return res.json(existingVoteJson);
@@ -753,7 +656,6 @@ app.post("/vote", async (req, res) => {
         return res.json("Error updating vote");
       }
     } else {
-      console.log("i");
       try {
         await addVote(req, user_id, req.body.target_id, req.body.vote_type, isComment);
         return res.json("done");
@@ -910,7 +812,6 @@ async function updatecommVote(req, newValue, existingVoteid, existingVotevalue) 
     { $set: { value: newValue } }
   );
   await updatecommRating(req, existingVotevalue, newValue);
-  console.log(updateResult);
   return updateResult;
 }
 
@@ -922,7 +823,6 @@ async function addcommVote(req, user_id, target_id, vote_type, is_comment) {
     value: vote_type,
   });
   await addcommRating(req);
-  console.log(insertResult);
   return insertResult;
 }
 async function addcommRating(req) {
@@ -931,7 +831,6 @@ async function addcommRating(req) {
     { id: req.body.target_id },
     { $inc: { rating: req.body.vote_type } }
   );
-  console.log(insertResult);
   return insertResult;
 }
 
@@ -942,7 +841,6 @@ async function updatecommRating(req, existingvalue, newValue) {
     { id: req.body.target_id },
     { $inc: { rating: delta } }
   );
-  console.log(insertResult);
   return insertResult;
 }
 
@@ -953,24 +851,20 @@ app.post("/commentvote", async (req, res) => {
     return res.json({ Message: "We need token Provide it..." });
   }
   const isComment = req.body.is_comment;
-  console.log(req);
 
   try {
     const user_id = await get_author_id(token);
-    console.log("---------" + user_id);
 
     const results = await CommentVote.find({
       user_id,
       comment_id: req.body.target_id,
     });
-    console.log("***********" + results);
 
     if (results.length > 0) {
       const existingVote = results[0];
       const existingVoteJson = [existingVote.toJSON()];
       const newValue =
         existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
-      console.log("U");
 
       try {
         await updatecommVote(req, newValue, existingVote.id, existingVote.value);
@@ -980,7 +874,6 @@ app.post("/commentvote", async (req, res) => {
         return res.json("Error updating vote");
       }
     } else {
-      console.log("i");
       try {
         await addcommVote(req, user_id, req.body.target_id, req.body.vote_type, isComment);
         return res.json("done");
@@ -1023,7 +916,6 @@ app.get("/userInfo", async (req, res) => {
     });
     return res.json(data);
   } catch (err) {
-    console.log(err + "H");
     return res.json("Error");
   }
 });
@@ -1031,7 +923,6 @@ app.get("/userInfo", async (req, res) => {
 
 
 app.get("/allnotes", async (req, res) => {
-  console.log("ds");
   try {
     const data = await Note.find({});
     return res.json(data);
@@ -1064,7 +955,6 @@ app.post("/noteupload", async (req, res) => {
         file_name: req.body.file_name,
         file_size: req.body.file_size,
       });
-      console.log("Note inserted successfully:", result);
       return res.status(200).json({ message: "Note uploaded successfully." });
     } catch (err) {
       console.error("Error inserting note into database:", err);
@@ -1089,56 +979,18 @@ async function get_user_name(id) {
 
 
 app.post("/username", async (req, res) => {
-  console.log("request ", req);
   const id = req.body.id;
   if (id === undefined) {
     return res.json(null);
   }
   try {
     const name = await get_user_name(id);
-    console.log("get_user_name ", name);
     return res.json(name);
   } catch (err) {
     console.error(err);
     return res.json(null);
   }
-  // try {
-  //   const username = get_user_name(id);
-  //   console.log("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&s", username)
-  //   return res.json(username);
-  // } catch (error) {
-  //   console.error(error);
-  //   return res.json("Error");
-  // }
 });
-
-
-// app.get('/pdf-preview/:filename', async (req, res) => {
-//   const pdfPath = path.join(__dirname, 'pdfs', req.params.filename); // Adjust the path as necessary
-
-//   if (!fs.existsSync(pdfPath)) {
-//     return res.status(404).send('PDF not found');
-//   }
-
-//   const outputPath = path.join(__dirname, 'previews', `${path.basename(req.params.filename, '.pdf')}.png`);
-
-//   if (!fs.existsSync(outputPath)) {
-//     try {
-//       await poppler.convert(pdfPath, {
-//         format: 'png',
-//         out_dir: path.join(__dirname, 'previews'),
-//         out_prefix: path.basename(req.params.filename, '.pdf'),
-//         page: 1
-//       });
-//     } catch (error) {
-//       return res.status(500).send('Error generating preview');
-//     }
-//   }
-
-//   res.sendFile(outputPath);
-// });
-
-
 
 
 async function notes_updateVote(req, newValue, existingVoteid, existingvotevalue) {
@@ -1161,7 +1013,6 @@ async function notes_addVote(req, user_id, target_id, vote_type, is_comment) {
   return insertResult;
 }
 async function notes_addRating(req) {
-  // add rating
   const insertResult = await Note.updateOne(
     { id: req.body.target_id },
     { $inc: { rating: req.body.vote_type } }
@@ -1170,7 +1021,6 @@ async function notes_addRating(req) {
 }
 
 async function notes_updateRating(req, existingvalue, newValue) {
-  // rating - existingvalue + newValue
   const delta = -existingvalue + newValue;
   const insertResult = await Note.updateOne(
     { id: req.body.target_id },
@@ -1215,11 +1065,9 @@ app.post("/notevote", async (req, res) => {
   if (!token) {
     return res.json({ Message: "We need token Provide it..." });
   }
-  console.log(req);
 
   try {
     const user_id = await get_author_id(token);
-    console.log("---------" + user_id);
 
     const results = await NoteVote.find({ user_id, note_id: req.body.target_id });
     if (results.length > 0) {
@@ -1227,7 +1075,6 @@ app.post("/notevote", async (req, res) => {
       const existingVoteJson = [existingVote.toJSON()];
       const newValue =
         existingVote.value === req.body.vote_type ? 0 : req.body.vote_type;
-      console.log("U");
       try {
         await notes_updateVote(req, newValue, existingVote.id, existingVote.value);
         return res.json(existingVoteJson);
@@ -1236,7 +1083,6 @@ app.post("/notevote", async (req, res) => {
         return res.json("Error updating vote");
       }
     } else {
-      console.log("i");
       try {
         await notes_addVote(req, user_id, req.body.target_id, req.body.vote_type);
         return res.json("done");
@@ -1267,7 +1113,6 @@ app.post("/question_marked", async (req, res) => {
         user_id,
         question_id: req.body.question_id,
       });
-      console.log("marked que inserted successfully:", result);
       return res.status(200).json({ message: "marked que uploaded successfully." });
     } catch (err) {
       console.error("Error inserting marked question into database:", err);
@@ -1294,7 +1139,6 @@ app.post("/note_marked", async (req, res) => {
         user_id,
         note_id: req.body.note_id,
       });
-      console.log("marked note inserted successfully:", result);
       return res.status(200).json({ message: "marked note uploaded successfully." });
     } catch (err) {
       console.error("Error inserting marked note into database:", err);
@@ -1322,7 +1166,6 @@ app.post("/question_unmarked", async (req, res) => {
         user_id,
         question_id: req.body.question_id,
       });
-      console.log("marked que inserted successfully:", result);
       return res.status(200).json({ message: "marked que uploaded successfully." });
     } catch (err) {
       console.error("Error inserting marked question into database:", err);
@@ -1348,7 +1191,6 @@ app.post("/note_unmarked", async (req, res) => {
         user_id,
         note_id: req.body.note_id,
       });
-      console.log("marked note inserted successfully:", result);
       return res.status(200).json({ message: "marked note uploaded successfully." });
     } catch (err) {
       console.error("Error inserting marked note into database:", err);
@@ -1376,7 +1218,6 @@ app.post("/ismarked", async (req, res) => {
         question_id: req.body.question_id,
       });
       const result = [{ row_exists: exists ? 1 : 0 }];
-      console.log("marked que inserted successfully:", result);
       return res.status(200).json({ result });
     } catch (err) {
       console.error("Error inserting marked question into database:", err);
@@ -1402,7 +1243,6 @@ app.post("/ismarkednote", async (req, res) => {
         note_id: req.body.note_id,
       });
       const result = [{ row_exists: exists ? 1 : 0 }];
-      console.log("marked note inserted successfully:", result);
       return res.status(200).json({ result });
     } catch (err) {
       console.error("Error inserting marked note into database:", err);

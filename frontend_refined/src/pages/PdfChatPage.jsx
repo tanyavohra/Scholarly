@@ -1,16 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Send, FileUp, Sparkles, Loader2 } from "lucide-react";
-import { useLocation } from "react-router-dom";
 import { api, ApiError } from "@/lib/api.js";
 import { toast } from "@/lib/toast.jsx";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const PdfChatPage = () => {
-  const location = useLocation();
-  const legacySourceUrl = String(location.state?.sourceUrl || "").trim();
-
   const [messages, setMessages] = useState([
     {
       role: "system",
@@ -25,27 +21,6 @@ const PdfChatPage = () => {
   const [docId, setDocId] = useState("");
   const autoStartedRef = useRef(false);
 
-  useEffect(() => {
-    if (!legacySourceUrl) return;
-    toast({
-      title: "URL PDFs disabled",
-      description: "This build no longer supports URL-based PDF ingestion. Please upload the PDF file.",
-    });
-  }, [legacySourceUrl]);
-
-  useEffect(() => {
-    // Switching documents resets state.
-    setProcessed(false);
-    setPdfFile(null);
-    setDocId("");
-    autoStartedRef.current = false;
-    setMessages([
-      {
-        role: "system",
-        text: "Upload a PDF and I’ll answer questions about it.",
-      },
-    ]);
-  }, [legacySourceUrl]);
 
   const canProcess = useMemo(() => Boolean(pdfFile), [pdfFile]);
 

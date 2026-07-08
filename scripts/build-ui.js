@@ -35,21 +35,6 @@ function tryRun(cmd, args, options = {}) {
   return !result.error && result.status === 0;
 }
 
-function resolveUiTarget() {
-  const args = process.argv.slice(2);
-  const flagRefined = args.includes("--refined");
-  const flagLegacy = args.includes("--legacy");
-  if (flagRefined && flagLegacy) {
-    throw new Error("Pass only one of --refined or --legacy");
-  }
-  if (flagRefined) return "refined";
-  if (flagLegacy) return "legacy";
-
-  const env = String(process.env.BRAINLINK_UI || "").trim().toLowerCase();
-  if (env === "refined" || env === "legacy") return env;
-  return "refined";
-}
-
 function ensureExists(dirPath, label) {
   if (!fs.existsSync(dirPath)) {
     throw new Error(`${label} not found at ${dirPath}`);
@@ -59,19 +44,12 @@ function ensureExists(dirPath, label) {
 function copyDirSync(src, dst) {
   fs.rmSync(dst, { recursive: true, force: true });
   fs.mkdirSync(dst, { recursive: true });
-  // Node 16+.
   fs.cpSync(src, dst, { recursive: true });
 }
 
-function buildLegacy() {
-  throw new Error(
-    "Legacy UI build requested, but the legacy UI has been removed from this repo. Use the refined UI build instead."
-  );
-}
-
-function buildRefined() {
+function main() {
   const refinedRoot = path.join(process.cwd(), "frontend_refined");
-  ensureExists(refinedRoot, "Refined frontend folder");
+  ensureExists(refinedRoot, "Frontend folder");
 
   const prefixArgs = ["--prefix", "frontend_refined"];
   const npm = npmCmd();
@@ -81,27 +59,18 @@ function buildRefined() {
   const hasLockfile = fs.existsSync(path.join(refinedRoot, "package-lock.json"));
 
   if (!hasNodeModules) {
-    // Prefer deterministic installs, but fall back if lockfile mismatch.
     const installed =
       (hasLockfile && tryRun(npm, [...prefixArgs, "ci"])) ||
       tryRun(npm, [...prefixArgs, "install", "--no-audit", "--no-fund"]);
-    if (!installed) throw new Error("Failed to install refined frontend dependencies");
+    if (!installed) throw new Error("Failed to install frontend dependencies");
   }
 
   runOrThrow(npm, [...prefixArgs, "run", "build"]);
 
   const distDir = path.join(refinedRoot, "dist");
   const outDir = path.join(process.cwd(), "build");
-  ensureExists(distDir, "Refined build output (dist)");
+  ensureExists(distDir, "Frontend build output (dist)");
   copyDirSync(distDir, outDir);
-}
-
-function main() {
-  const ui = resolveUiTarget();
-  console.log(`[build-ui] node=${process.version} platform=${process.platform} arch=${process.arch}`);
-  console.log(`[build-ui] target=${ui}`);
-  if (ui === "refined") buildRefined();
-  else buildLegacy();
 }
 
 main();

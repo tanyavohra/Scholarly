@@ -5,11 +5,13 @@
     "node": ">=20 <23"
   },
   "scripts": {
-    "refined:install": "npm --prefix frontend_refined install",
-    "refined:dev": "npm --prefix frontend_refined run dev",
-    "refined:build": "npm --prefix frontend_refined run build",
-    "refined:preview": "npm --prefix frontend_refined run preview",
-    "build": "node scripts/build-ui.js --refined",
-    "build:refined": "node scripts/build-ui.js --refined"
+    "install:frontend": "npm --prefix frontend_refined install",
+    "dev:frontend": "npm --prefix frontend_refined run dev",
+    "build:frontend": "npm --prefix frontend_refined run build",
+    "preview:frontend": "npm --prefix frontend_refined run preview",
+    "build": "node scripts/build-ui.js",
+    "refined:install": "npm run install:frontend",
+    "refined:dev": "npm run dev:frontend",
+    "refined:build": "npm run build:frontend"
   }
 }
