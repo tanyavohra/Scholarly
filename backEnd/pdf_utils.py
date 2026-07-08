@@ -513,7 +513,7 @@ def generate_answer(question: str, context: str) -> dict:
             ) from e
 
         base_url = (os.getenv("HF_ROUTER_BASE_URL") or "https://router.huggingface.co/v1").strip()
-        chat_model = model if ":" in model else f"{model}:hf-inference"
+        chat_model = model
 
         client = OpenAI(base_url=base_url, api_key=token)
         system_content = (
