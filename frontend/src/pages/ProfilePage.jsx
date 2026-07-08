@@ -82,11 +82,11 @@ const ProfilePage = () => {
             }}
           />
         </div>
-        <div className="px-7 pb-7">
-          <div className="d-flex align-items-end gap-3 negative-mt-10 position-relative" style={{ zIndex: 10 }}>
+        <div className="px-4 pb-4">
+          <div className="d-flex align-items-end gap-3 position-relative" style={{ zIndex: 10, marginTop: "-2.5rem" }}>
             <div
-              className="rounded-4 bg-primary d-flex align-items-center justify-content-center shadow-lg border-4 border-white"
-              style={{ width: 76, height: 76, boxShadow: "0 4px 16px hsl(245 58% 56% / 0.3)" }}
+              className="rounded-4 bg-primary d-flex align-items-center justify-content-center shadow-lg border-4"
+              style={{ width: 76, height: 76, borderColor: "hsl(var(--card))", boxShadow: "0 4px 16px hsl(245 58% 56% / 0.3)" }}
             >
               <User className="text-primary-foreground" style={{ width: "2rem", height: "2rem" }} />
             </div>

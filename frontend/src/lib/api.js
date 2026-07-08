@@ -1,4 +1,8 @@
-const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+const RENDER_API = "https://scholarly-1-95vz.onrender.com";
+const API_BASE_URL = String(
+  import.meta.env.VITE_API_BASE_URL ||
+  (window.location.hostname.includes("vercel.app") ? RENDER_API : "")
+).replace(/\/+$/, "");
 
 function buildUrl(path) {
   if (!path.startsWith("/")) path = `/${path}`;
