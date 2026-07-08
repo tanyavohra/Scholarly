@@ -5,10 +5,10 @@
     "node": ">=20 <23"
   },
   "scripts": {
-    "install:frontend": "npm --prefix frontend_refined install",
-    "dev:frontend": "npm --prefix frontend_refined run dev",
-    "build:frontend": "npm --prefix frontend_refined run build",
-    "preview:frontend": "npm --prefix frontend_refined run preview",
+    "install:frontend": "npm --prefix frontend install",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "preview:frontend": "npm --prefix frontend run preview",
     "build": "npm --prefix frontend install && npm --prefix frontend run build",
     "refined:install": "npm run install:frontend",
     "refined:dev": "npm run dev:frontend",

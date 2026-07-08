@@ -225,42 +225,8 @@ def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _WORD_RE.findall(raw)]
 
 
-def _split_sentences(text: str) -> list[str]:
-    raw = re.sub(r"\s+", " ", (text or "").strip())
-    if not raw:
-        return []
-    parts = re.split(r"(?<=[.!?])\s+", raw)
-    return [p.strip() for p in parts if p.strip()]
-
-
 def _extractive_fallback_answer(question: str, context: str) -> str:
-    q_tokens = set(_tokenize(_expand_query_for_retrieval(question, chunks=[context])))
-    if not q_tokens:
-        return "I don't know. What exactly should I answer from the PDF?"
-
-    scored: list[tuple[int, str]] = []
-    for sent in _split_sentences(context):
-        s_tokens = set(_tokenize(sent))
-        overlap = len(q_tokens & s_tokens)
-        if overlap <= 0:
-            continue
-        scored.append((overlap, sent))
-
-    if not scored:
-        return "I don't know. Which keyword or section should I search for in the PDF?"
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    answer_sentence = scored[0][1].strip()
-    try:
-        max_answer_words = int(os.getenv("QA_EXTRACTIVE_MAX_ANSWER_WORDS") or "40")
-    except ValueError:
-        max_answer_words = 40
-    if max_answer_words > 0:
-        words = answer_sentence.split()
-        if len(words) > max_answer_words:
-            answer_sentence = " ".join(words[:max_answer_words]).rstrip() + "…"
-
-    return answer_sentence
+    return "I don't know. Could you rephrase or ask about a different section of the PDF?"
 
 
 def _coerce_hf_output_to_text(out) -> str:
@@ -433,7 +399,7 @@ def generate_answer(question: str, context: str) -> dict:
         }
 
     backend = (os.getenv("QA_BACKEND") or "hf_hub").strip().lower()
-    if backend not in ("hf_hub", "huggingface_hub", "hf_api", "auto"):
+    if backend not in ("hf_hub", "huggingface_hub", "hf_api", "hf_chat", "auto"):
         raise ValueError(f"Unsupported QA_BACKEND={backend}")
 
     token = (
@@ -460,7 +426,7 @@ def generate_answer(question: str, context: str) -> dict:
             "warning": "QA_BACKEND=auto with no token; returning extractive fallback answer.",
         }
 
-    model = (os.getenv("QA_MODEL_NAME") or "google/flan-t5-base").strip()
+    model = (os.getenv("QA_MODEL_NAME") or "").strip()
     try:
         max_new_tokens = int(os.getenv("QA_MAX_NEW_TOKENS") or "256")
     except ValueError:
@@ -544,6 +510,96 @@ def generate_answer(question: str, context: str) -> dict:
                 text = " ".join(words[:max_words]).rstrip() + "…"
 
         return text
+
+    def _run_hf_chat() -> dict:
+        try:
+            from openai import OpenAI
+        except Exception as e:
+            raise RuntimeError(
+                "QA_BACKEND=hf_chat requires the Python package `openai`. "
+                "Add it to requirements.txt and redeploy."
+            ) from e
+
+        base_url = (os.getenv("HF_ROUTER_BASE_URL") or "https://router.huggingface.co/v1").strip()
+        chat_model = model if ":" in model else f"{model}:hf-inference"
+
+        client = OpenAI(base_url=base_url, api_key=token)
+        if allow_general:
+            system_content = (
+                "You answer questions using the provided context as evidence. "
+                "You MAY use general knowledge to interpret abbreviations/synonyms or add brief background definitions, "
+                "but do NOT invent claims about the specific PDF/document that are not supported by the context. "
+                "If the user asks for a fact about the document and it is not supported by the context, say \"I don't know\" "
+                "and ask one clarifying question. Otherwise give a concise answer (1-3 sentences)."
+            )
+        else:
+            system_content = (
+                "You answer questions using ONLY the provided context. "
+                "If the answer is not supported by the context, say \"I don't know\" and ask one clarifying question. "
+                "Otherwise give a concise answer (1-3 sentences)."
+            )
+        completion = client.chat.completions.create(
+            model=chat_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content,
+                },
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+            ],
+            temperature=temperature,
+            max_tokens=max_new_tokens,
+            top_p=top_p,
+        )
+
+        msg = None
+        try:
+            msg = completion.choices[0].message.content
+        except Exception:
+            msg = None
+
+        raw_text = (msg or "").strip()
+        text = _postprocess_answer(raw_text)
+        if not text:
+            raise RuntimeError("Empty model output")
+
+        return {
+            "answer": text,
+            "llm_used": True,
+            "mode": qa_mode or "default",
+            "backend": "hf_router_chat",
+            "model": chat_model,
+        }
+
+    if backend == "hf_chat":
+        try:
+            return _run_hf_chat()
+        except Exception as e:
+            if isinstance(e, StopIteration):
+                try:
+                    return _run_hf_chat()
+                except Exception as e2:
+                    e = e2
+
+            try:
+                print(f"[qa] HF chat generation failed: {type(e).__name__}: {e}", flush=True)
+            except Exception:
+                pass
+
+            if verbose_warnings:
+                detail = f" ({type(e).__name__}: {e})"
+            elif isinstance(e, StopIteration):
+                detail = " (StopIteration: upstream returned an empty response)"
+            else:
+                detail = f" ({type(e).__name__})"
+
+            return {
+                "answer": _extractive_fallback_answer(question, context),
+                "llm_used": False,
+                "mode": qa_mode or "default",
+                "backend": "extractive",
+                "warning": f"LLM generation failed; returning extractive fallback answer.{detail}",
+            }
 
     from huggingface_hub import InferenceClient
     client = InferenceClient(model=model, token=token, timeout=timeout_s)

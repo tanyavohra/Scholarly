@@ -4,7 +4,6 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 import os
 import json 
-import shutil
 import multiprocessing
 import threading
 import time

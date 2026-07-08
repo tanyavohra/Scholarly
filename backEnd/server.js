@@ -899,8 +899,6 @@ app.get("/allcomments", async (req, res) => {
 });
 
 app.get("/userInfo", async (req, res) => {
-  const targetIds = req.body.target_ids;
-
   const token = req.cookies.token;
 
   if (!token) {
@@ -1289,19 +1287,6 @@ app.get("/questionswithtag", async (req, res) => {
     return res.status(500).send("Server error");
   }
 });
-
-app.get("/questionswithuserid", async (req, res) => {
-  const tagId = req.query.user_id; // Retrieve tag_id from the query parameters
-  
-  try {
-    const results = await QuestionTag.find({ author_id: tagId }).select({ question_id: 1 });
-    return res.json(results.map((r) => ({ question_id: r.question_id })));
-  } catch (err) {
-    console.error("Error fetching questions:", err);
-    return res.status(500).send("Server error");
-  }
-});
-
 
 app.get("/questionwithIDs", async (req, res) => {
   let questionIds = req.query.ids; // here there will be an array of question IDs

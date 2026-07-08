@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY scripts ./scripts
-COPY frontend_refined ./frontend_refined
+COPY frontend ./frontend
 ARG BRAINLINK_UI=refined
 ENV BRAINLINK_UI=$BRAINLINK_UI
 ARG VITE_API_BASE_URL

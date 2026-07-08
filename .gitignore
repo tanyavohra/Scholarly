@@ -15,7 +15,6 @@ backEnd/.env
 *.faiss
 backEnd/__pycache__/
 backEnd/faiss_index/
-frontend_refined/.vite/
 
 # Optional: OS files
 .DS_Store
