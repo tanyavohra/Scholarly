@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "builds": [{ "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "build" } }],
+  "builds": [{ "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "frontend/dist" } }],
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://scholarly-1-95vz.onrender.com/api/:path*" },
     { "source": "/healthz", "destination": "https://scholarly-1-95vz.onrender.com/healthz" },

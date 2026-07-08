@@ -9,7 +9,7 @@
     "dev:frontend": "npm --prefix frontend_refined run dev",
     "build:frontend": "npm --prefix frontend_refined run build",
     "preview:frontend": "npm --prefix frontend_refined run preview",
-    "build": "node scripts/build-ui.js",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
     "refined:install": "npm run install:frontend",
     "refined:dev": "npm run dev:frontend",
     "refined:build": "npm run build:frontend"
