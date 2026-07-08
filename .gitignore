@@ -3,7 +3,7 @@ node_modules/
 dist/
 backEnd/node_modules/
 build/
-
+frontend/node_modules/
 # Environment files
 backEnd/.env
 .env
